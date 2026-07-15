@@ -1,0 +1,57 @@
+{
+  "name": "clickup-axi",
+  "version": "0.1.0",
+  "description": "AXI-compliant ClickUp API v2 wrapper — token-efficient TOON output, contextual suggestions, custom-field-by-name resolution",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kunchenguid/axi-tools.git",
+    "directory": "packages/clickup-axi"
+  },
+  "keywords": [
+    "clickup",
+    "cli",
+    "agent",
+    "axi",
+    "toon",
+    "project-management"
+  ],
+  "bin": {
+    "clickup-axi": "./dist/bin/clickup-axi.js"
+  },
+  "files": [
+    "dist",
+    "skills/clickup-axi",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:skill": "node -e \"import('./dist/src/skill.js').then(m=>{const fs=require('fs');fs.mkdirSync('skills/clickup-axi',{recursive:true});fs.writeFileSync('skills/clickup-axi/SKILL.md',m.createSkillMarkdown()+'\\n');console.log('wrote skills/clickup-axi/SKILL.md');})\"",
+    "dev": "tsx bin/clickup-axi.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . --max-warnings=0"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@toon-format/toon": "^2.1.0",
+    "axi-sdk-js": "^0.1.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.0.0",
+    "eslint": "^10.7.0",
+    "globals": "^17.7.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.64.0",
+    "vitest": "^3.0.0"
+  }
+}
