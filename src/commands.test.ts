@@ -68,7 +68,7 @@ describe("task command", () => {
   it("returns help with no subcommand", async () => {
     const out = await taskCommand([], CTX);
     expect(out).toContain("usage:");
-    expect(out).toContain("subcommands[8]");
+    expect(out).toContain("subcommands[12]");
   });
 
   it("requires --list for task list", async () => {

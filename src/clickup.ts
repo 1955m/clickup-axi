@@ -1,5 +1,5 @@
 import { AxiError, mapClickupError, type ClickupHttpError } from "./errors.js";
-import { CLICKUP_API_BASE, resolveToken } from "./config.js";
+import { CLICKUP_API_BASE, CLICKUP_API_V3_BASE, resolveToken } from "./config.js";
 
 /**
  * fetch-like seam so tests can inject a fake transport without touching the
@@ -48,6 +48,8 @@ export interface RequestOptions {
   headers?: Record<string, string>;
   /** When true, skip the Authorization header (used by `api` with custom auth). */
   noAuth?: boolean;
+  /** API base URL override. Defaults to the v2 base; pass CLICKUP_API_V3_BASE for v3 endpoints. */
+  base?: string;
 }
 
 export interface ClickupResponse<T = unknown> {
@@ -56,8 +58,9 @@ export interface ClickupResponse<T = unknown> {
   retryAfter?: number;
 }
 
-function buildUrl(path: string, params?: RequestOptions["params"]): string {
-  const url = path.startsWith("http") ? path : `${CLICKUP_API_BASE}${path}`;
+function buildUrl(path: string, params?: RequestOptions["params"], base?: string): string {
+  const apiBase = base ?? CLICKUP_API_BASE;
+  const url = path.startsWith("http") ? path : `${apiBase}${path}`;
   if (!params) return url;
   const entries = Object.entries(params).filter(([, v]) => v !== undefined);
   if (entries.length === 0) return url;
@@ -80,8 +83,8 @@ function sleep(ms: number): Promise<void> {
  * non-429 error) throws an `AxiError` via `mapClickupError`.
  */
 export async function request<T = unknown>(options: RequestOptions & { path: string }): Promise<ClickupResponse<T>> {
-  const { method = "GET", path, params, body, headers, noAuth } = options;
-  const url = buildUrl(path, params);
+  const { method = "GET", path, params, body, headers, noAuth, base } = options;
+  const url = buildUrl(path, params, base);
   const init: RequestInit = {
     method,
     headers: {
@@ -197,5 +200,62 @@ export async function del<T = unknown>(
   params?: RequestOptions["params"],
 ): Promise<T | undefined> {
   const resp = await request<T>({ path, method: "DELETE", params });
+  return resp.body;
+}
+
+/**
+ * Issue a ClickUp API v3 request. The path is workspace-scoped (e.g.
+ * `/workspaces/${teamId}/docs`); the v3 base is applied. Used by the doc and
+ * chat command groups (ClickUp has moved Docs and Chat to API v3).
+ */
+export async function requestV3<T = unknown>(options: RequestOptions & { path: string }): Promise<ClickupResponse<T>> {
+  return request<T>({ ...options, base: CLICKUP_API_V3_BASE });
+}
+
+/** GET a ClickUp API v3 path and return the parsed JSON body. */
+export async function getV3<T = unknown>(
+  path: string,
+  params?: RequestOptions["params"],
+): Promise<T> {
+  const resp = await requestV3<T>({ path, method: "GET", params });
+  return resp.body;
+}
+
+/** POST a JSON body to a ClickUp API v3 path and return the parsed JSON body. */
+export async function postV3<T = unknown>(
+  path: string,
+  body?: unknown,
+  params?: RequestOptions["params"],
+): Promise<T> {
+  const resp = await requestV3<T>({ path, method: "POST", body, params });
+  return resp.body;
+}
+
+/** PUT a JSON body to a ClickUp API v3 path and return the parsed JSON body. */
+export async function putV3<T = unknown>(
+  path: string,
+  body?: unknown,
+  params?: RequestOptions["params"],
+): Promise<T> {
+  const resp = await requestV3<T>({ path, method: "PUT", body, params });
+  return resp.body;
+}
+
+/** PATCH a JSON body on a ClickUp API v3 path and return the parsed JSON body. */
+export async function patchV3<T = unknown>(
+  path: string,
+  body?: unknown,
+  params?: RequestOptions["params"],
+): Promise<T> {
+  const resp = await requestV3<T>({ path, method: "PATCH", body, params });
+  return resp.body;
+}
+
+/** DELETE a ClickUp API v3 path and return the parsed JSON body (or undefined). */
+export async function delV3<T = unknown>(
+  path: string,
+  params?: RequestOptions["params"],
+): Promise<T | undefined> {
+  const resp = await requestV3<T>({ path, method: "DELETE", params });
   return resp.body;
 }

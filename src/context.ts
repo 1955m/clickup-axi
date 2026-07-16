@@ -16,6 +16,7 @@ export interface ParsedContextArgs {
   spaceFlag: string | undefined;
   folderFlag: string | undefined;
   listFlag: string | undefined;
+  pathFlag: string | undefined;
   strippedArgs: string[];
 }
 
@@ -24,13 +25,16 @@ const CONTEXT_FLAGS: Record<string, true> = {
   "--space": true,
   "--folder": true,
   "--list": true,
+  "--path": true,
 };
 
 /**
- * Strip --team/--space/--folder/--list (space or equals form) from args.
+ * Strip --team/--space/--folder/--list/--path (space or equals form) from args.
  *
  * These are routing flags consumed by every command; they are never passed
  * to the ClickUp API as raw query params. Each accepts space or equals form.
+ * `--path` is resolved into --space/--folder/--list IDs by name at runtime
+ * (see hierarchy.ts), so it is stripped here and applied in withContext().
  */
 export function parseContextArgs(args: string[]): ParsedContextArgs {
   const stripped: string[] = [];
@@ -38,6 +42,7 @@ export function parseContextArgs(args: string[]): ParsedContextArgs {
   let spaceFlag: string | undefined;
   let folderFlag: string | undefined;
   let listFlag: string | undefined;
+  let pathFlag: string | undefined;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     let handled = false;
@@ -58,7 +63,7 @@ export function parseContextArgs(args: string[]): ParsedContextArgs {
     }
     if (!handled) stripped.push(arg);
   }
-  return { teamFlag, spaceFlag, folderFlag, listFlag, strippedArgs: stripped };
+  return { teamFlag, spaceFlag, folderFlag, listFlag, pathFlag, strippedArgs: stripped };
 
   function assignFlag(flag: string, value: string | undefined): void {
     switch (flag) {
@@ -73,6 +78,9 @@ export function parseContextArgs(args: string[]): ParsedContextArgs {
         break;
       case "--list":
         listFlag = value;
+        break;
+      case "--path":
+        pathFlag = value;
         break;
     }
   }

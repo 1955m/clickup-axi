@@ -40,7 +40,7 @@ const patterns: ErrorPattern[] = [
     suggestions: () => [
       "Run `clickup-axi setup token` to write a fresh token to ~/.config/clickup-axi/token",
       "Or export CLICKUP_API_TOKEN=<pk_...>",
-      "CI fallback uses AWS Secrets Manager `example-space/ci/tokens` key `CLICKUP_TOKEN`",
+      "Token chain: CLICKUP_API_TOKEN env > ~/.config/clickup-axi/token > ~/.config/mcp/config.json",
     ],
   },
   {
@@ -106,7 +106,7 @@ export function mapClickupError(e: ClickupHttpError): AxiError {
 /** Returned when no token can be resolved from any source. */
 export function noTokenError(): AxiError {
   return new AxiError(
-    "No ClickUp API token found (env > ~/.config/clickup-axi/token > MCP config > AWS SM)",
+    "No ClickUp API token found (env > ~/.config/clickup-axi/token > MCP config)",
     "AUTH_REQUIRED",
     [
       "Run `clickup-axi setup token` to configure the token",

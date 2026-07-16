@@ -1,4 +1,4 @@
-import { get } from "./clickup.js";
+import { get, post, del } from "./clickup.js";
 
 /**
  * Custom-field resolution by NAME — never hardcode field UUIDs.
@@ -96,6 +96,49 @@ export async function fetchListFieldIndex(listId: string): Promise<FieldIndex> {
 export async function fetchSpaceFieldIndex(spaceId: string): Promise<FieldIndex> {
   const body = await get<{ fields?: ClickupField[] }>(`/space/${spaceId}/field`);
   return buildFieldIndex(body?.fields ?? []);
+}
+
+/** Fetch and index the custom fields created at the folder level. */
+export async function fetchFolderFieldIndex(folderId: string): Promise<FieldIndex> {
+  const body = await get<{ fields?: ClickupField[] }>(`/folder/${folderId}/field`);
+  return buildFieldIndex(body?.fields ?? []);
+}
+
+/** Fetch and index the custom fields created at the workspace (team) level. */
+export async function fetchTeamFieldIndex(teamId: string): Promise<FieldIndex> {
+  const body = await get<{ fields?: ClickupField[] }>(`/team/${teamId}/field`);
+  return buildFieldIndex(body?.fields ?? []);
+}
+
+/**
+ * Set a custom-field value on a task, resolving the field UUID by NAME at
+ * runtime (never hardcoded). `coerceFieldValue` resolves drop_down/labels
+ * option names to ids at write time. Mirrors the task `--set-field` path.
+ */
+export async function setTaskCustomFieldByName(
+  taskId: string,
+  listId: string,
+  name: string,
+  rawValue: unknown,
+): Promise<{ fieldId: string; coerced: unknown }> {
+  const index = await fetchListFieldIndex(listId);
+  const fieldDef = index.get(name.trim().toLowerCase());
+  const fieldId = requireFieldId(index, name);
+  const coerced = coerceFieldValue(fieldDef, rawValue);
+  await post(`/task/${taskId}/field/${fieldId}`, { value: coerced });
+  return { fieldId, coerced };
+}
+
+/** Remove a custom-field value from a task, resolving the field UUID by NAME. */
+export async function removeTaskCustomFieldByName(
+  taskId: string,
+  listId: string,
+  name: string,
+): Promise<string> {
+  const index = await fetchListFieldIndex(listId);
+  const fieldId = requireFieldId(index, name);
+  await del(`/task/${taskId}/field/${fieldId}`);
+  return fieldId;
 }
 
 /**

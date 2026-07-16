@@ -30,7 +30,7 @@ describe("main (in-process, no network)", () => {
     await main({ argv: ["--help"], stdout: out.stdout });
     const text = out.chunks.join("");
     expect(text).toContain("usage:");
-    expect(text).toContain("commands[14]:");
+    expect(text).toContain("commands[22]:");
     expect(text).toContain("--team");
     expect(text).toContain("--space");
   });
@@ -57,7 +57,7 @@ describe("main (in-process, no network)", () => {
     expect(text).toContain("name: clickup-axi");
     expect(text).toContain("user-invocable: false");
     expect(text).toContain("## Commands");
-    expect(text).toContain("commands[14]:");
+    expect(text).toContain("commands[22]:");
   });
 
   it("renders the home dashboard header even on API failure", async () => {
@@ -82,14 +82,19 @@ describe("createSkillMarkdown", () => {
     const md = createSkillMarkdown();
     expect(md).toContain("---\nname: clickup-axi");
     expect(md).toContain("category: productivity");
-    expect(md).toContain("commands[14]:");
+    expect(md).toContain("commands[22]:");
     expect(md).toContain("npx -y clickup-axi");
   });
 
-  it("documents the token discovery order", () => {
+  it("documents the token discovery order", async () => {
     const md = createSkillMarkdown();
     expect(md).toContain("CLICKUP_API_TOKEN");
-    expect(md).toContain("AWS Secrets Manager");
+    expect(md).toContain("COMPANY ClickUp account");
+    // AWS Secrets Manager is documented as REMOVED (no longer a token source);
+    // the aws invocation must not appear as a documented fallback.
+    expect(md).toContain("REMOVED");
+    expect(md).not.toContain("aws --profile example-space-staging");
+    expect(md).not.toMatch(/mcpServers\.clickup\.env[^.]*>\s*AWS/);
     expect(md).toContain("--dry-run");
     expect(md).toContain("--execute");
   });

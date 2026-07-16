@@ -1,4 +1,5 @@
 import { AxiError } from "./errors.js";
+import { isReadonlyEnforced } from "./config.js";
 
 /**
  * Write guardrail: all mutations default to DRY-RUN. They print exactly what
@@ -7,6 +8,12 @@ import { AxiError } from "./errors.js";
  * axi-suite-plan §4.5 `--dry-run`/`--execute` guardrails.
  *
  * Read-only commands never call this.
+ *
+ * Defense-in-depth (captain ruling 2026-07-16, COMPANY account): when the
+ * readonly gate is enforced (`~/.config/clickup-axi/readonly` present, config
+ * `readonly=true`, or `CLICKUP_AXI_READONLY=1`), `--execute` itself is refused
+ * with a clear error. Agents must obtain the captain's explicit permission AND
+ * the gate must be removed before any mutation can run.
  */
 
 export interface WriteGateResult {
@@ -30,6 +37,17 @@ export function resolveWriteGate(
   }
   const envExecute = (process.env["FM_CLICKUP_EXECUTE"] ?? "").trim() === "1";
   const execute = executeFlag || envExecute;
+  if (execute && isReadonlyEnforced()) {
+    throw new AxiError(
+      "Read-only mode is enforced; captain approval + removing the readonly gate required. --execute refused against the company ClickUp account.",
+      "FORBIDDEN",
+      [
+        "Obtain the captain's explicit permission before ANY --execute against the company workspace",
+        "Remove the readonly gate to allow mutations: delete ~/.config/clickup-axi/readonly (or set readonly=false in ~/.config/clickup-axi/config.json)",
+        "Dry-run previews (the default) remain available without the gate",
+      ],
+    );
+  }
   return { execute, dryRun: !execute };
 }
 

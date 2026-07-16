@@ -1,6 +1,6 @@
-import { get } from "../clickup.js";
+import { getV3, postV3, putV3 } from "../clickup.js";
 import { AxiError } from "../errors.js";
-import { takeFlag, getPositional } from "../args.js";
+import { getFlag, getPositional, hasFlag } from "../args.js";
 import {
   field,
   custom,
@@ -12,118 +12,288 @@ import {
   type FieldDef,
 } from "../toon.js";
 import { formatCountLine } from "../format.js";
-import { truncateBody } from "../body.js";
+import { truncateBody, takeBody } from "../body.js";
 import { getSuggestions } from "../suggestions.js";
+import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
 import type { ClickupContext } from "../context.js";
 
 export const DOC_HELP = `usage: clickup-axi doc <subcommand> [flags]
-subcommands[4]:
-  search, view <id>, page-list <id>, page-view <page-id>
+subcommands[7]:
+  search, view <id>, create, page-list <id>, page-view <page-id>, page-create, page-edit <page-id>
+notes:
+  Docs are served by the ClickUp API v3 (ClickUp moved Docs out of v2). Paths are /api/v3/workspaces/<team>/docs. v3 search filters by parent/creator/archived/deleted — there is no free-text query param. page content is markdown (content_format text/md). create/page-create/page-edit default to --dry-run.
 flags{search}:
-  --query <text> (required), --team <id>, --folder <id>, --list <id>, --space <id>
+  --team <id> (workspace, default EXAMPLE_ORG), --parent-id <id>, --parent-type <space|folder|list|everything|workspace>, --creator <user-id>, --archived, --deleted, --limit <n> (default 50, max 100), --cursor <cursor>
 flags{view}:
-  (none — returns the doc's pages and source)
+  --team <id>
+flags{create}:
+  --name <text> (required), --team <id>, --parent-type <space|folder|list|everything|workspace>, --parent-id <id>, --visibility <public|private|personal|hidden>, --create-page, --dry-run | --execute
 flags{page-list}:
-  (none — lists pages of a doc)
+  --team <id>, --depth <n> (max sub-page depth, default -1 = all)
 flags{page-view}:
-  (none)
+  --team <id>, --doc <id> (required, the doc that owns the page), --content-format <text/md|text/plain> (default text/md)
+flags{page-create}:
+  --doc <id> (required), --team <id>, --name <text> (required), --parent-page <id>, --sub-title <text>, --body <text> or --body-file <path>, --content-format <text/md|text/plain>, --dry-run | --execute
+flags{page-edit}:
+  --doc <id> (required), --team <id>, --name <text>, --sub-title <text>, --body <text> or --body-file <path>, --content-format <text/md|text/plain>, --dry-run | --execute
 examples:
-  clickup-axi doc search --query "runbook"
+  clickup-axi doc search --parent-type space --parent-id <id>
   clickup-axi doc view <doc-id>
-  clickup-axi doc page-view <page-id>`;
+  clickup-axi doc page-view <page-id> --doc <doc-id>
+  clickup-axi doc create --name "Runbook" --parent-type space --parent-id <id> --execute
+  clickup-axi doc page-create --doc <doc-id> --name "Step 1" --body "Do the thing" --execute`;
+
+const PARENT_TYPE_MAP: Record<string, number> = {
+  space: 4,
+  folder: 5,
+  list: 6,
+  everything: 7,
+  workspace: 12,
+};
 
 interface ClickupDoc {
   id: string;
-  name: string;
-  doc_id?: string;
-  parent_id?: string;
+  name?: string;
   date_created?: string | number;
-  creator?: { id?: number; username?: string };
+  date_updated?: string | number;
+  creator?: number;
+  parent?: { id?: string; type?: number };
+  workspace_id?: number;
+  archived?: boolean;
+  deleted?: boolean;
+}
+
+interface ClickupPageRef {
+  id?: string;
+  name?: string;
+  parent_page_id?: string;
+  pages?: ClickupPageRef[];
 }
 
 interface ClickupPage {
   id?: string;
   name?: string;
-  content?: string | { content?: string[] };
-  orderindex?: number;
-  type?: string;
+  sub_title?: string;
+  content?: string;
   date_created?: string | number;
-  updated_at?: string | number;
+  date_updated?: string | number;
 }
 
 const docSchema: FieldDef<ClickupDoc>[] = [
   field("id"),
   field("name"),
   custom("created", (d) => formatEpoch(d.date_created)),
+  custom("updated", (d) => formatEpoch(d.date_updated)),
+  custom("parent", (d) => (d.parent ? `${d.parent.id ?? "?"}/${d.parent.type ?? "?"}` : "none")),
+];
+const pageRefSchema: FieldDef<ClickupPageRef>[] = [
+  field("id"),
+  field("name"),
+  field("parent_page_id"),
 ];
 
-const pageSchema: FieldDef<ClickupPage>[] = [field("id"), field("name"), field("orderindex")];
+function v3DocPath(teamId: string, suffix = ""): string {
+  return `/workspaces/${teamId}/docs${suffix}`;
+}
 
 async function searchDocs(args: string[], ctx: ClickupContext): Promise<string> {
-  const query = takeFlag(args, "--query");
-  if (!query) throw new AxiError("--query <text> is required: clickup-axi doc search --query \"...\"", "VALIDATION_ERROR");
-  const params: Record<string, string | undefined> = { query };
-  // doc search supports scoping by parent. Default to the resolved team.
-  const teamId = takeFlag(args, "--team") ?? ctx.teamId;
-  const folderId = takeFlag(args, "--folder") ?? ctx.folderId;
-  const listId = takeFlag(args, "--list") ?? ctx.listId;
-  const spaceId = takeFlag(args, "--space") ?? ctx.spaceId;
-  if (listId) params["list_id"] = listId;
-  else if (folderId) params["folder_id"] = folderId;
-  else if (spaceId) params["space_id"] = spaceId;
-  else params["team_id"] = teamId;
-  const body = await get<{ docs?: ClickupDoc[] }>(`/team/${teamId}/docs`, params);
+  const teamId = getFlag(args, "--team") ?? ctx.teamId;
+  const params: Record<string, string | number | boolean | undefined> = {};
+  const parentId = getFlag(args, "--parent-id");
+  const parentType = getFlag(args, "--parent-type");
+  const creator = getFlag(args, "--creator");
+  const limit = getFlag(args, "--limit") ?? "50";
+  const cursor = getFlag(args, "--cursor");
+  if (parentId) params["parent_id"] = parentId;
+  if (parentType) {
+    const mapped = PARENT_TYPE_MAP[parentType.toLowerCase()] ?? parentType;
+    params["parent_type"] = String(mapped);
+  }
+  if (creator) params["creator"] = creator;
+  if (hasFlag(args, "--archived")) params["archived"] = true;
+  if (hasFlag(args, "--deleted")) params["deleted"] = true;
+  params["limit"] = Math.min(Number(limit) || 50, 100);
+  if (cursor) params["cursor"] = cursor;
+  const body = await getV3<{ docs?: ClickupDoc[]; next_cursor?: string }>(v3DocPath(teamId), params);
   const docs = body?.docs ?? [];
-  return renderOutput([
+  const blocks: (string | undefined)[] = [
     formatCountLine({ count: docs.length }),
     renderList("docs", docs, docSchema),
-    renderHelp(getSuggestions({ domain: "doc", action: "search", ctx })),
-  ]);
+  ];
+  if (body?.next_cursor) {
+    blocks.push(`next_cursor: ${body.next_cursor}`);
+    blocks.push(renderHelp([`Pass --cursor ${body.next_cursor} to fetch the next page`]));
+  }
+  blocks.push(renderHelp(getSuggestions({ domain: "doc", action: "search", ctx })));
+  return renderOutput(blocks);
 }
 
 async function viewDoc(args: string[], ctx: ClickupContext): Promise<string> {
   const id = getPositional(args, 0);
   if (!id) throw new AxiError("Doc ID is required: clickup-axi doc view <id>", "VALIDATION_ERROR");
-  const doc = await get<ClickupDoc>(`/doc/${id}`);
+  const teamId = getFlag(args, "--team") ?? ctx.teamId;
+  const doc = await getV3<ClickupDoc>(`${v3DocPath(teamId)}/${id}`);
   return renderOutput([
     renderDetail("doc", doc, docSchema),
     renderHelp(getSuggestions({ domain: "doc", action: "view", id, ctx })),
   ]);
 }
 
+async function createDoc(args: string[], ctx: ClickupContext): Promise<string> {
+  const name = getFlag(args, "--name");
+  if (!name) throw new AxiError("--name is required: clickup-axi doc create --name \"...\"", "VALIDATION_ERROR");
+  const teamId = getFlag(args, "--team") ?? ctx.teamId;
+  const parentType = getFlag(args, "--parent-type");
+  const parentId = getFlag(args, "--parent-id");
+  const visibility = getFlag(args, "--visibility");
+  const createPage = hasFlag(args, "--create-page");
+  const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
+  const payload: Record<string, unknown> = { name, create_page: createPage };
+  if (visibility) payload["visibility"] = visibility.toUpperCase();
+  if (parentType && parentId) {
+    const mapped = PARENT_TYPE_MAP[parentType.toLowerCase()] ?? Number(parentType);
+    payload["parent"] = { id: parentId, type: mapped };
+  } else if (parentType || parentId) {
+    throw new AxiError("--parent-type and --parent-id must be given together", "VALIDATION_ERROR");
+  }
+  if (!gate.execute) {
+    return renderOutput([
+      renderDetail("create", { name, team: teamId, status: writeGateLabel(gate), payload }, [
+        field("name"),
+        field("team"),
+        field("status"),
+        field("payload"),
+      ]),
+      renderHelp(["Add --execute to create this Doc in ClickUp (v3 Docs API)"]),
+    ]);
+  }
+  const created = await postV3<ClickupDoc>(v3DocPath(teamId), payload);
+  return renderOutput([
+    renderDetail("created", { id: created.id ?? null, name: created.name ?? name, status: "ok" }, [
+      field("id"),
+      field("name"),
+      field("status"),
+    ]),
+    renderHelp(getSuggestions({ domain: "doc", action: "create", id: created.id, ctx })),
+  ]);
+}
+
 async function pageList(args: string[], ctx: ClickupContext): Promise<string> {
   const id = getPositional(args, 0);
   if (!id) throw new AxiError("Doc ID is required: clickup-axi doc page-list <id>", "VALIDATION_ERROR");
-  const body = await get<{ pages?: ClickupPage[] }>(`/doc/${id}/page`);
-  const pages = body?.pages ?? [];
+  const teamId = getFlag(args, "--team") ?? ctx.teamId;
+  const depth = getFlag(args, "--depth") ?? "-1";
+  const body = await getV3<ClickupPageRef[]>(`${v3DocPath(teamId)}/${id}/page_listing`, {
+    max_page_depth: Number(depth),
+  });
+  const pages = Array.isArray(body) ? body : [];
+  const flat: ClickupPageRef[] = [];
+  const walk = (nodes: ClickupPageRef[]): void => {
+    for (const n of nodes) {
+      flat.push(n);
+      if (n.pages?.length) walk(n.pages);
+    }
+  };
+  walk(pages);
   return renderOutput([
-    formatCountLine({ count: pages.length }),
-    renderList("pages", pages, pageSchema),
+    formatCountLine({ count: flat.length }),
+    renderList("pages", flat, pageRefSchema),
     renderHelp(getSuggestions({ domain: "doc", action: "view", id, ctx })),
   ]);
 }
 
 async function pageView(args: string[], ctx: ClickupContext): Promise<string> {
-  const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Page ID is required: clickup-axi doc page-view <page-id>", "VALIDATION_ERROR");
-  const page = await get<ClickupPage>(`/doc/page/${id}`);
+  const pageId = getPositional(args, 0);
+  if (!pageId) throw new AxiError("Page ID is required: clickup-axi doc page-view <page-id> --doc <id>", "VALIDATION_ERROR");
+  const docId = getFlag(args, "--doc");
+  if (!docId) throw new AxiError("--doc <id> is required (the doc that owns the page)", "VALIDATION_ERROR");
+  const teamId = getFlag(args, "--team") ?? ctx.teamId;
+  const contentFormat = getFlag(args, "--content-format") ?? "text/md";
+  const page = await getV3<ClickupPage>(`${v3DocPath(teamId)}/${docId}/pages/${pageId}`, {
+    content_format: contentFormat,
+  });
   const blocks: (string | undefined)[] = [
-    renderDetail("page", { id: page.id, name: page.name, orderindex: page.orderindex, type: page.type }, [
+    renderDetail("page", { id: page.id, name: page.name, sub_title: page.sub_title }, [
       field("id"),
       field("name"),
-      field("orderindex"),
-      field("type"),
+      field("sub_title"),
     ]),
+    renderDetail("content", { body: truncateBody(page.content ?? "", 2000) }, [field("body")]),
+    renderHelp(getSuggestions({ domain: "doc", action: "view", id: pageId, ctx })),
   ];
-  const content = page.content;
-  const text = typeof content === "string"
-    ? content
-    : Array.isArray(content?.content)
-      ? (content?.content as string[]).join("\n")
-      : "";
-  blocks.push(renderDetail("content", { body: truncateBody(text, 2000) }, [field("body")]));
-  blocks.push(renderHelp(getSuggestions({ domain: "doc", action: "view", id, ctx })));
   return renderOutput(blocks);
+}
+
+async function pageCreate(args: string[], ctx: ClickupContext): Promise<string> {
+  const docId = getFlag(args, "--doc");
+  if (!docId) throw new AxiError("--doc <id> is required", "VALIDATION_ERROR");
+  const name = getFlag(args, "--name");
+  if (!name) throw new AxiError("--name is required", "VALIDATION_ERROR");
+  const teamId = getFlag(args, "--team") ?? ctx.teamId;
+  const parentPage = getFlag(args, "--parent-page");
+  const subTitle = getFlag(args, "--sub-title");
+  const bodyText = takeBody(args, { inlineFlags: ["--body"], fileFlags: ["--body-file"] });
+  const contentFormat = getFlag(args, "--content-format") ?? "text/md";
+  const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
+  const payload: Record<string, unknown> = { name, content_format: contentFormat };
+  if (parentPage) payload["parent_page_id"] = parentPage;
+  if (subTitle) payload["sub_title"] = subTitle;
+  if (bodyText !== undefined) payload["content"] = bodyText;
+  if (!gate.execute) {
+    return renderOutput([
+      renderDetail("page-create", { doc: docId, status: writeGateLabel(gate), payload }, [
+        field("doc"),
+        field("status"),
+        field("payload"),
+      ]),
+      renderHelp(["Add --execute to create this page in ClickUp (v3 Docs API)"]),
+    ]);
+  }
+  const created = await postV3<ClickupPage>(`${v3DocPath(teamId)}/${docId}/pages`, payload);
+  return renderOutput([
+    renderDetail("created", { id: created.id ?? null, name, status: "ok" }, [
+      field("id"),
+      field("name"),
+      field("status"),
+    ]),
+    renderHelp(getSuggestions({ domain: "doc", action: "create", id: docId, ctx })),
+  ]);
+}
+
+async function pageEdit(args: string[], ctx: ClickupContext): Promise<string> {
+  const pageId = getPositional(args, 0);
+  if (!pageId) throw new AxiError("Page ID is required: clickup-axi doc page-edit <page-id> --doc <id>", "VALIDATION_ERROR");
+  const docId = getFlag(args, "--doc");
+  if (!docId) throw new AxiError("--doc <id> is required (the doc that owns the page)", "VALIDATION_ERROR");
+  const teamId = getFlag(args, "--team") ?? ctx.teamId;
+  const name = getFlag(args, "--name");
+  const subTitle = getFlag(args, "--sub-title");
+  const bodyText = takeBody(args, { inlineFlags: ["--body"], fileFlags: ["--body-file"] });
+  const contentFormat = getFlag(args, "--content-format") ?? "text/md";
+  const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
+  const payload: Record<string, unknown> = { content_format: contentFormat };
+  if (name) payload["name"] = name;
+  if (subTitle) payload["sub_title"] = subTitle;
+  if (bodyText !== undefined) {
+    payload["content"] = bodyText;
+    payload["content_edit_mode"] = "replace";
+  }
+  if (!gate.execute) {
+    return renderOutput([
+      renderDetail("page-edit", { page: pageId, doc: docId, status: writeGateLabel(gate), payload }, [
+        field("page"),
+        field("doc"),
+        field("status"),
+        field("payload"),
+      ]),
+      renderHelp(["Add --execute to apply this page edit in ClickUp (v3 Docs API)"]),
+    ]);
+  }
+  await putV3(`${v3DocPath(teamId)}/${docId}/pages/${pageId}`, payload);
+  return renderOutput([
+    renderDetail("updated", { page: pageId, status: "ok" }, [field("page"), field("status")]),
+    renderHelp(getSuggestions({ domain: "doc", action: "create", id: pageId, ctx })),
+  ]);
 }
 
 export async function docCommand(args: string[], ctx: ClickupContext): Promise<string> {
@@ -135,13 +305,19 @@ export async function docCommand(args: string[], ctx: ClickupContext): Promise<s
       return searchDocs(rest, ctx);
     case "view":
       return viewDoc(rest, ctx);
+    case "create":
+      return createDoc(rest, ctx);
     case "page-list":
       return pageList(rest, ctx);
     case "page-view":
       return pageView(rest, ctx);
+    case "page-create":
+      return pageCreate(rest, ctx);
+    case "page-edit":
+      return pageEdit(rest, ctx);
     default:
       return renderError(`Unknown subcommand: ${sub}`, "VALIDATION_ERROR", [
-        "Available subcommands: search, view, page-list, page-view",
+        "Available subcommands: search, view, create, page-list, page-view, page-create, page-edit",
       ]);
   }
 }

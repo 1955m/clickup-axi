@@ -2,7 +2,14 @@ import { installSessionStartHooks } from "axi-sdk-js";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { renderHelp, renderOutput, renderError } from "../toon.js";
-import { tokenFilePath, resolveTeamId, resolveSpaceId } from "../config.js";
+import {
+  tokenFilePath,
+  readonlyFilePath,
+  configJsonPath,
+  resolveTeamId,
+  resolveSpaceId,
+  isReadonlyEnforced,
+} from "../config.js";
 import { readStdin, isStdinTTY } from "../stdin.js";
 import { get } from "../clickup.js";
 import type { ClickupContext } from "../context.js";
@@ -11,7 +18,8 @@ export const SETUP_HELP = `usage: clickup-axi setup <action>
 Configure the ClickUp API token or install agent SessionStart hooks.
   setup token              write a token to ~/.config/clickup-axi/token (pipe via stdin)
   setup auth               verify the resolved token + show the authorized user
-  setup workspace          print the resolved team/space coordinates
+  setup workspace          print the resolved team/space coordinates + readonly gate status
+  setup readonly           show the defense-in-depth readonly gate status and how to enable it
   setup hooks              install agent SessionStart hooks for ambient context
 examples:
   echo -n "pk_..." | clickup-axi setup token
@@ -69,17 +77,35 @@ export async function setupCommand(args: string[], _ctx: ClickupContext | undefi
     }
     return renderOutput([
       `auth:\n  user_id: ${user.user.id ?? "unknown"}\n  username: ${user.user.username ?? "unknown"}\n  email: ${user.user.email ?? "unknown"}`,
-      renderHelp(["Token resolves via env > ~/.config/clickup-axi/token > MCP config > AWS SM"]),
+      renderHelp(["Token resolves via env > ~/.config/clickup-axi/token > ~/.config/mcp/config.json (AWS SM fallback removed)"]),
     ]);
   }
   if (action === "workspace") {
     return renderOutput([
       `workspace:\n  team_id: ${resolveTeamId()}\n  space_id: ${resolveSpaceId()}`,
       `token_file:\n  path: ${tokenFilePath()}\n  present: ${existsSync(tokenFilePath())}`,
-      renderHelp(["Override with --team / --space flags or FM_CLICKUP_TEAM / FM_CLICKUP_SPACE env"]),
+      `readonly_gate:\n  enforced: ${isReadonlyEnforced() ? "yes" : "no"}\n  marker: ${readonlyFilePath()}\n  config: ${configJsonPath()}`,
+      renderHelp([
+        "Override with --team / --space flags or FM_CLICKUP_TEAM / FM_CLICKUP_SPACE env",
+        "Enable the readonly gate: touch ~/.config/clickup-axi/readonly (recommended on the company runtime)",
+      ]),
+    ]);
+  }
+  if (action === "readonly") {
+    const enforced = isReadonlyEnforced();
+    return renderOutput([
+      `readonly_gate:\n  enforced: ${enforced ? "yes (--execute is refused)" : "no (--execute works when passed)"}`,
+      `  marker_file: ${readonlyFilePath()}`,
+      `  config_file: ${configJsonPath()}`,
+      renderHelp([
+        "Enable: `touch ~/.config/clickup-axi/readonly` (presence = enforced)",
+        "Or set { \"readonly\": true } in ~/.config/clickup-axi/config.json",
+        "Or export CLICKUP_AXI_READONLY=1 for a session/test",
+        "This is defense-in-depth on top of the dry-run-by-default guard; it does NOT replace captain approval before --execute",
+      ]),
     ]);
   }
   return renderError(`Unknown setup action: ${action}`, "VALIDATION_ERROR", [
-    "Run `clickup-axi setup token`, `setup auth`, `setup workspace`, or `setup hooks`",
+    "Run `clickup-axi setup token`, `setup auth`, `setup workspace`, `setup readonly`, or `setup hooks`",
   ]);
 }

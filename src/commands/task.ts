@@ -35,8 +35,8 @@ import {
 import type { ClickupContext } from "../context.js";
 
 export const TASK_HELP = `usage: clickup-axi task <subcommand> [flags]
-subcommands[8]:
-  list, view <id>, create, update <id>, delete <id>, comments <id>, custom-fields <id>, dependencies <id>
+subcommands[12]:
+  list, view <id>, create, update <id>, delete <id>, comments <id>, custom-fields <id>, dependencies <id>, time-in-status <id>, merge <id>, add-to-list <id>, remove-from-list <id>
 flags{list}:
   --list <id> (default: first list in resolved space), --status <name>, --assignee <id>, --include-closed, --subtasks, --page <n>, --per-page <n> (default 30), --fields <a,b,c>, --search <text>
 flags{view}:
@@ -57,11 +57,21 @@ flags{dependencies add}:
   --depends-on <task-id> (required), --type <waiting-on|blocking|task|subtask> (default waiting-on), --dry-run | --execute
 flags{dependencies delete}:
   --depends-on <task-id> (required), --type <type>, --dry-run | --execute
+flags{time-in-status}:
+  (read-only; requires the Total Time in Status ClickApp enabled)
+flags{merge}:
+  --task <source-id> (repeatable, the tasks to merge INTO the target), --dry-run | --execute
+flags{add-to-list}:
+  --list <id> (required, the additional list), --dry-run | --execute
+flags{remove-from-list}:
+  --list <id> (required, the additional list; cannot remove the home list), --dry-run | --execute
 examples:
   clickup-axi task list
   clickup-axi task list --status "in progress" --list <id>
   clickup-axi task view <id> --comments
   clickup-axi task create --name "Ship release" --list <id> --set-field "Product"=Backend --execute
+  clickup-axi task time-in-status <id>
+  clickup-axi task merge <target-id> --task <source-id> --execute
   clickup-axi task custom-fields <id>
   clickup-axi task dependencies <id>`;
 
@@ -564,6 +574,14 @@ export async function taskCommand(args: string[], ctx: ClickupContext): Promise<
       return taskCustomFields(rest, ctx);
     case "dependencies":
       return taskDependencies(rest, ctx);
+    case "time-in-status":
+      return taskTimeInStatus(rest, ctx);
+    case "merge":
+      return taskMerge(rest, ctx);
+    case "add-to-list":
+      return taskAddToList(rest, ctx);
+    case "remove-from-list":
+      return taskRemoveFromList(rest, ctx);
     case "--help":
     case "-h":
     case "help":
@@ -574,4 +592,121 @@ export async function taskCommand(args: string[], ctx: ClickupContext): Promise<
         "Run `clickup-axi task --help` to see available subcommands",
       ]);
   }
+}
+
+interface ClickupStatusDuration {
+  status?: string;
+  color?: string;
+  total_time?: number;
+  current_duration?: number;
+}
+
+async function taskTimeInStatus(args: string[], ctx: ClickupContext): Promise<string> {
+  const id = getPositional(args, 0);
+  if (!id) throw new AxiError("Task ID is required: clickup-axi task time-in-status <id>", "VALIDATION_ERROR");
+  const body = await get<{ current_status?: ClickupStatusDuration; status_history?: ClickupStatusDuration[] }>(
+    `/task/${id}/time_in_status`,
+  );
+  const cur = body?.current_status;
+  const history = body?.status_history ?? [];
+  const curRow = cur ? `${cur.status ?? "?"} (${formatDuration(cur.total_time)})` : "none";
+  const historySchema: FieldDef<ClickupStatusDuration>[] = [
+    field("status"),
+    field("color"),
+    custom("total", (s) => formatDuration(s.total_time)),
+  ];
+  return renderOutput([
+    renderDetail("current_status", { status: curRow }, [field("status")]),
+    formatCountLine({ count: history.length }),
+    history.length ? renderList("status_history", history, historySchema) : undefined,
+    renderHelp(getSuggestions({ domain: "task", action: "view", id, ctx })),
+  ]);
+}
+
+function formatDuration(ms: number | undefined): string {
+  if (!ms || isNaN(ms)) return "0s";
+  const sec = Math.floor(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h`;
+  const day = Math.floor(hr / 24);
+  return `${day}d`;
+}
+
+async function taskMerge(args: string[], ctx: ClickupContext): Promise<string> {
+  const id = getPositional(args, 0);
+  if (!id) throw new AxiError("Target Task ID is required: clickup-axi task merge <id>", "VALIDATION_ERROR");
+  const sourceTaskIds = getAllFlags(args, "--task");
+  if (sourceTaskIds.length === 0) {
+    throw new AxiError("--task <source-id> is required (repeatable; the tasks to merge INTO the target)", "VALIDATION_ERROR");
+  }
+  const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
+  const payload: Record<string, unknown> = { source_task_ids: sourceTaskIds };
+  if (!gate.execute) {
+    return renderOutput([
+      renderDetail("merge", { target: id, status: writeGateLabel(gate), payload }, [
+        field("target"),
+        field("status"),
+        field("payload"),
+      ]),
+      renderHelp(["Add --execute to merge these tasks in ClickUp (the source tasks are deleted into the target)"]),
+    ]);
+  }
+  await post(`/task/${id}/merge`, payload);
+  return renderOutput([
+    renderDetail("merged", { target: id, sources: sourceTaskIds.length, status: "ok" }, [
+      field("target"),
+      field("sources"),
+      field("status"),
+    ]),
+    renderHelp(getSuggestions({ domain: "task", action: "delete", id, ctx })),
+  ]);
+}
+
+async function taskAddToList(args: string[], ctx: ClickupContext): Promise<string> {
+  const id = getPositional(args, 0);
+  if (!id) throw new AxiError("Task ID is required: clickup-axi task add-to-list <id>", "VALIDATION_ERROR");
+  const listId = getFlag(args, "--list") ?? ctx.listId;
+  if (!listId) throw new AxiError("--list <id> is required (the additional list)", "VALIDATION_ERROR");
+  const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
+  if (!gate.execute) {
+    return renderOutput([
+      renderDetail("add-to-list", { task: id, list: listId, status: writeGateLabel(gate) }, [
+        field("task"),
+        field("list"),
+        field("status"),
+      ]),
+      renderHelp(["Add --execute to add this task to the additional list in ClickUp (requires Tasks in Multiple Lists ClickApp)"]),
+    ]);
+  }
+  await post(`/list/${listId}/task/${id}`, {});
+  return renderOutput([
+    renderDetail("added", { task: id, list: listId, status: "ok" }, [field("task"), field("list"), field("status")]),
+    renderHelp(getSuggestions({ domain: "task", action: "update", id, ctx })),
+  ]);
+}
+
+async function taskRemoveFromList(args: string[], ctx: ClickupContext): Promise<string> {
+  const id = getPositional(args, 0);
+  if (!id) throw new AxiError("Task ID is required: clickup-axi task remove-from-list <id>", "VALIDATION_ERROR");
+  const listId = getFlag(args, "--list") ?? ctx.listId;
+  if (!listId) throw new AxiError("--list <id> is required (the additional list; cannot be the home list)", "VALIDATION_ERROR");
+  const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
+  if (!gate.execute) {
+    return renderOutput([
+      renderDetail("remove-from-list", { task: id, list: listId, status: writeGateLabel(gate) }, [
+        field("task"),
+        field("list"),
+        field("status"),
+      ]),
+      renderHelp(["Add --execute to remove this task from the additional list in ClickUp (cannot remove the home list)"]),
+    ]);
+  }
+  await del(`/list/${listId}/task/${id}`);
+  return renderOutput([
+    renderDetail("removed", { task: id, list: listId, status: "ok" }, [field("task"), field("list"), field("status")]),
+    renderHelp(getSuggestions({ domain: "task", action: "update", id, ctx })),
+  ]);
 }
