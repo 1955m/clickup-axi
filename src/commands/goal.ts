@@ -14,7 +14,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const GOAL_HELP = `usage: clickup-axi goal <subcommand> [flags]
 subcommands[8]:
@@ -88,6 +88,7 @@ const keyResultSchema: FieldDef<ClickupKeyResult>[] = [
 ];
 
 async function listGoals(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--team"], "goal list");
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const body = await get<{ goals?: ClickupGoal[] }>(`/team/${teamId}/goal`);
   const goals = body?.goals ?? [];
@@ -99,8 +100,10 @@ async function listGoals(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function viewGoal(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "goal view");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Goal ID is required: clickup-axi goal view <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Goal ID is required: clickup-axi goal view <id>", "VALIDATION_ERROR");
   const goal = await get<{ goal?: ClickupGoal }>(`/goal/${id}`);
   const g = goal?.goal;
   if (!g) return renderError(`Goal ${id} not found`, "NOT_FOUND");
@@ -111,8 +114,27 @@ async function viewGoal(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function createGoal(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--name",
+      "--team",
+      "--description",
+      "--due",
+      "--owners",
+      "--color",
+      "--multiple-owners",
+      "--execute",
+      "--dry-run",
+    ],
+    "goal create",
+  );
   const name = getFlag(args, "--name");
-  if (!name) throw new AxiError("--name is required: clickup-axi goal create --name \"...\"", "VALIDATION_ERROR");
+  if (!name)
+    throw new AxiError(
+      '--name is required: clickup-axi goal create --name "..."',
+      "VALIDATION_ERROR",
+    );
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const description = getFlag(args, "--description") ?? "";
   const due = getFlag(args, "--due");
@@ -122,7 +144,11 @@ async function createGoal(args: string[], ctx: ClickupContext): Promise<string> 
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   const payload: Record<string, unknown> = { name, description, multiple_owners: multiple };
   if (due !== undefined) payload["due_date"] = Number(due);
-  if (owners) payload["owners"] = owners.split(",").map((o) => Number(o.trim())).filter((n) => !isNaN(n));
+  if (owners)
+    payload["owners"] = owners
+      .split(",")
+      .map((o) => Number(o.trim()))
+      .filter((n) => !isNaN(n));
   if (color) payload["color"] = color;
   if (!gate.execute) {
     return renderOutput([
@@ -147,8 +173,14 @@ async function createGoal(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function updateGoal(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--name", "--description", "--due", "--owners", "--color", "--execute", "--dry-run"],
+    "goal update",
+  );
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Goal ID is required: clickup-axi goal update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Goal ID is required: clickup-axi goal update <id>", "VALIDATION_ERROR");
   const name = getFlag(args, "--name");
   const description = getFlag(args, "--description");
   const due = getFlag(args, "--due");
@@ -159,7 +191,11 @@ async function updateGoal(args: string[], ctx: ClickupContext): Promise<string> 
   if (name) payload["name"] = name;
   if (description !== undefined) payload["description"] = description;
   if (due !== undefined) payload["due_date"] = Number(due);
-  if (owners) payload["owners"] = owners.split(",").map((o) => Number(o.trim())).filter((n) => !isNaN(n));
+  if (owners)
+    payload["owners"] = owners
+      .split(",")
+      .map((o) => Number(o.trim()))
+      .filter((n) => !isNaN(n));
   if (color) payload["color"] = color;
   if (!gate.execute) {
     return renderOutput([
@@ -179,8 +215,10 @@ async function updateGoal(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function deleteGoal(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--execute", "--dry-run"], "goal delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Goal ID is required: clickup-axi goal delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Goal ID is required: clickup-axi goal delete <id>", "VALIDATION_ERROR");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
@@ -196,6 +234,11 @@ async function deleteGoal(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function createKeyResult(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--goal", "--name", "--target", "--current", "--type", "--unit", "--execute", "--dry-run"],
+    "goal key-result-create",
+  );
   const goalId = getFlag(args, "--goal");
   if (!goalId) throw new AxiError("--goal <id> is required", "VALIDATION_ERROR");
   const name = getFlag(args, "--name");
@@ -219,7 +262,10 @@ async function createKeyResult(args: string[], ctx: ClickupContext): Promise<str
       renderHelp(["Add --execute to create this key result in ClickUp"]),
     ]);
   }
-  const created = await post<{ key_result?: ClickupKeyResult }>(`/goal/${goalId}/key_result`, payload);
+  const created = await post<{ key_result?: ClickupKeyResult }>(
+    `/goal/${goalId}/key_result`,
+    payload,
+  );
   return renderOutput([
     renderDetail("created", { id: created.key_result?.id ?? null, name, status: "ok" }, [
       field("id"),
@@ -231,8 +277,17 @@ async function createKeyResult(args: string[], ctx: ClickupContext): Promise<str
 }
 
 async function updateKeyResult(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--name", "--target", "--current", "--execute", "--dry-run"],
+    "goal key-result-update",
+  );
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Key result ID is required: clickup-axi goal key-result-update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Key result ID is required: clickup-axi goal key-result-update <id>",
+      "VALIDATION_ERROR",
+    );
   const name = getFlag(args, "--name");
   const target = getFlag(args, "--target");
   const current = getFlag(args, "--current");
@@ -259,12 +314,20 @@ async function updateKeyResult(args: string[], ctx: ClickupContext): Promise<str
 }
 
 async function deleteKeyResult(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--execute", "--dry-run"], "goal key-result-delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Key result ID is required: clickup-axi goal key-result-delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Key result ID is required: clickup-axi goal key-result-delete <id>",
+      "VALIDATION_ERROR",
+    );
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("key-result-delete", { id, status: writeGateLabel(gate) }, [field("id"), field("status")]),
+      renderDetail("key-result-delete", { id, status: writeGateLabel(gate) }, [
+        field("id"),
+        field("status"),
+      ]),
       renderHelp(["Add --execute to permanently delete this key result in ClickUp"]),
     ]);
   }

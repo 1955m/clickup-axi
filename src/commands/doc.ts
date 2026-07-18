@@ -15,7 +15,7 @@ import { formatCountLine } from "../format.js";
 import { truncateBody, takeBody } from "../body.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const DOC_HELP = `usage: clickup-axi doc <subcommand> [flags]
 subcommands[7]:
@@ -97,6 +97,20 @@ function v3DocPath(teamId: string, suffix = ""): string {
 }
 
 async function searchDocs(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--team",
+      "--parent-id",
+      "--parent-type",
+      "--creator",
+      "--limit",
+      "--cursor",
+      "--archived",
+      "--deleted",
+    ],
+    "doc search",
+  );
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const params: Record<string, string | number | boolean | undefined> = {};
   const parentId = getFlag(args, "--parent-id");
@@ -114,7 +128,10 @@ async function searchDocs(args: string[], ctx: ClickupContext): Promise<string> 
   if (hasFlag(args, "--deleted")) params["deleted"] = true;
   params["limit"] = Math.min(Number(limit) || 50, 100);
   if (cursor) params["cursor"] = cursor;
-  const body = await getV3<{ docs?: ClickupDoc[]; next_cursor?: string }>(v3DocPath(teamId), params);
+  const body = await getV3<{ docs?: ClickupDoc[]; next_cursor?: string }>(
+    v3DocPath(teamId),
+    params,
+  );
   const docs = body?.docs ?? [];
   const blocks: (string | undefined)[] = [
     formatCountLine({ count: docs.length }),
@@ -129,6 +146,7 @@ async function searchDocs(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function viewDoc(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--team"], "doc view");
   const id = getPositional(args, 0);
   if (!id) throw new AxiError("Doc ID is required: clickup-axi doc view <id>", "VALIDATION_ERROR");
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
@@ -140,8 +158,26 @@ async function viewDoc(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function createDoc(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--name",
+      "--team",
+      "--parent-type",
+      "--parent-id",
+      "--visibility",
+      "--create-page",
+      "--execute",
+      "--dry-run",
+    ],
+    "doc create",
+  );
   const name = getFlag(args, "--name");
-  if (!name) throw new AxiError("--name is required: clickup-axi doc create --name \"...\"", "VALIDATION_ERROR");
+  if (!name)
+    throw new AxiError(
+      '--name is required: clickup-axi doc create --name "..."',
+      "VALIDATION_ERROR",
+    );
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const parentType = getFlag(args, "--parent-type");
   const parentId = getFlag(args, "--parent-id");
@@ -179,8 +215,10 @@ async function createDoc(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function pageList(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--team", "--depth"], "doc page-list");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Doc ID is required: clickup-axi doc page-list <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Doc ID is required: clickup-axi doc page-list <id>", "VALIDATION_ERROR");
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const depth = getFlag(args, "--depth") ?? "-1";
   const body = await getV3<ClickupPageRef[]>(`${v3DocPath(teamId)}/${id}/page_listing`, {
@@ -203,10 +241,16 @@ async function pageList(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function pageView(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--team", "--doc", "--content-format"], "doc page-view");
   const pageId = getPositional(args, 0);
-  if (!pageId) throw new AxiError("Page ID is required: clickup-axi doc page-view <page-id> --doc <id>", "VALIDATION_ERROR");
+  if (!pageId)
+    throw new AxiError(
+      "Page ID is required: clickup-axi doc page-view <page-id> --doc <id>",
+      "VALIDATION_ERROR",
+    );
   const docId = getFlag(args, "--doc");
-  if (!docId) throw new AxiError("--doc <id> is required (the doc that owns the page)", "VALIDATION_ERROR");
+  if (!docId)
+    throw new AxiError("--doc <id> is required (the doc that owns the page)", "VALIDATION_ERROR");
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const contentFormat = getFlag(args, "--content-format") ?? "text/md";
   const page = await getV3<ClickupPage>(`${v3DocPath(teamId)}/${docId}/pages/${pageId}`, {
@@ -225,6 +269,22 @@ async function pageView(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function pageCreate(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--doc",
+      "--team",
+      "--name",
+      "--parent-page",
+      "--sub-title",
+      "--body",
+      "--body-file",
+      "--content-format",
+      "--execute",
+      "--dry-run",
+    ],
+    "doc page-create",
+  );
   const docId = getFlag(args, "--doc");
   if (!docId) throw new AxiError("--doc <id> is required", "VALIDATION_ERROR");
   const name = getFlag(args, "--name");
@@ -261,10 +321,30 @@ async function pageCreate(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function pageEdit(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--doc",
+      "--team",
+      "--name",
+      "--sub-title",
+      "--body",
+      "--body-file",
+      "--content-format",
+      "--execute",
+      "--dry-run",
+    ],
+    "doc page-edit",
+  );
   const pageId = getPositional(args, 0);
-  if (!pageId) throw new AxiError("Page ID is required: clickup-axi doc page-edit <page-id> --doc <id>", "VALIDATION_ERROR");
+  if (!pageId)
+    throw new AxiError(
+      "Page ID is required: clickup-axi doc page-edit <page-id> --doc <id>",
+      "VALIDATION_ERROR",
+    );
   const docId = getFlag(args, "--doc");
-  if (!docId) throw new AxiError("--doc <id> is required (the doc that owns the page)", "VALIDATION_ERROR");
+  if (!docId)
+    throw new AxiError("--doc <id> is required (the doc that owns the page)", "VALIDATION_ERROR");
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const name = getFlag(args, "--name");
   const subTitle = getFlag(args, "--sub-title");
@@ -280,12 +360,11 @@ async function pageEdit(args: string[], ctx: ClickupContext): Promise<string> {
   }
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("page-edit", { page: pageId, doc: docId, status: writeGateLabel(gate), payload }, [
-        field("page"),
-        field("doc"),
-        field("status"),
-        field("payload"),
-      ]),
+      renderDetail(
+        "page-edit",
+        { page: pageId, doc: docId, status: writeGateLabel(gate), payload },
+        [field("page"), field("doc"), field("status"), field("payload")],
+      ),
       renderHelp(["Add --execute to apply this page edit in ClickUp (v3 Docs API)"]),
     ]);
   }

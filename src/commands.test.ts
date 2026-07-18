@@ -32,7 +32,9 @@ describe("api command", () => {
   });
 
   it("issues a GET and renders the response as TOON", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(makeResponse(200, { user: { id: 1, username: "ding" } }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(makeResponse(200, { user: { id: 1, username: "ding" } }));
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await apiCommand(["GET", "user"], CTX);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -43,9 +45,11 @@ describe("api command", () => {
   });
 
   it("strips noisy fields (avatar, profilePicture)", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      makeResponse(200, { user: { id: 1, avatar: "x", profilePicture: "y", username: "ding" } }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        makeResponse(200, { user: { id: 1, avatar: "x", profilePicture: "y", username: "ding" } }),
+      );
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await apiCommand(["user"], CTX);
     expect(out).not.toContain("avatar");
@@ -105,9 +109,11 @@ describe("task command", () => {
   });
 
   it("create with --execute POSTs to /list/<id>/task", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      makeResponse(200, { id: "new1", name: "New", url: "https://c.com/t/new1" }),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        makeResponse(200, { id: "new1", name: "New", url: "https://c.com/t/new1" }),
+      );
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await taskCommand(["create", "--name", "New", "--list", "123", "--execute"], CTX);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -127,7 +133,12 @@ describe("task command", () => {
             name: "Product",
             type: "drop_down",
             value: "opt-2",
-            type_config: { options: [{ id: "opt-1", name: "Backend" }, { id: "opt-2", name: "Frontend" }] },
+            type_config: {
+              options: [
+                { id: "opt-1", name: "Backend" },
+                { id: "opt-2", name: "Frontend" },
+              ],
+            },
           },
           { id: "f2", name: "Risk", type: "text", value: "high" },
         ],

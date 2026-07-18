@@ -14,7 +14,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const SPACE_HELP = `usage: clickup-axi space <subcommand> [flags]
 subcommands[5]:
@@ -50,11 +50,9 @@ const viewSchema: FieldDef<ClickupSpace>[] = [
 ];
 
 async function listSpaces(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--archived"], "space list");
   const archived = hasFlag(args, "--archived") ? "true" : "false";
-  const body = await get<{ spaces?: ClickupSpace[] }>(
-    `/team/${ctx.teamId}/space`,
-    { archived },
-  );
+  const body = await get<{ spaces?: ClickupSpace[] }>(`/team/${ctx.teamId}/space`, { archived });
   const list = body?.spaces ?? [];
   const isEmpty = list.length === 0;
   const suggestions = getSuggestions({ domain: "space", action: "list", isEmpty, ctx });
@@ -66,8 +64,10 @@ async function listSpaces(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function viewSpace(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "space view");
   const id = getPositional(args, 0) ?? ctx.spaceId;
-  if (!id) throw new AxiError("Space ID is required: clickup-axi space view <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Space ID is required: clickup-axi space view <id>", "VALIDATION_ERROR");
   const space = await get<ClickupSpace>(`/space/${id}`);
   return renderOutput([
     renderDetail("space", space, viewSchema),
@@ -76,8 +76,17 @@ async function viewSpace(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function createSpace(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--name", "--multiple", "--private", "--execute", "--dry-run"],
+    "space create",
+  );
   const name = takeFlag(args, "--name");
-  if (!name) throw new AxiError("--name is required: clickup-axi space create --name \"...\"", "VALIDATION_ERROR");
+  if (!name)
+    throw new AxiError(
+      '--name is required: clickup-axi space create --name "..."',
+      "VALIDATION_ERROR",
+    );
   const multiple = hasFlag(args, "--multiple");
   const privateSpace = hasFlag(args, "--private");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
@@ -109,8 +118,14 @@ async function createSpace(args: string[], ctx: ClickupContext): Promise<string>
 }
 
 async function updateSpace(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--name", "--archived", "--private", "--multiple", "--execute", "--dry-run"],
+    "space update",
+  );
   const id = getPositional(args, 0) ?? ctx.spaceId;
-  if (!id) throw new AxiError("Space ID is required: clickup-axi space update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Space ID is required: clickup-axi space update <id>", "VALIDATION_ERROR");
   const name = takeFlag(args, "--name");
   const archived = hasFlag(args, "--archived");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
@@ -135,8 +150,10 @@ async function updateSpace(args: string[], ctx: ClickupContext): Promise<string>
 }
 
 async function deleteSpace(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--execute", "--dry-run"], "space delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Space ID is required: clickup-axi space delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Space ID is required: clickup-axi space delete <id>", "VALIDATION_ERROR");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([

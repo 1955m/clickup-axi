@@ -1,4 +1,5 @@
 import { resolveSpaceId, resolveTeamId } from "./config.js";
+import { AxiError } from "./errors.js";
 
 export interface ClickupContext {
   /** Team (workspace) ID — always resolved. */
@@ -115,5 +116,32 @@ export async function resolveListId(
     return lists[0]?.id;
   } catch {
     return undefined;
+  }
+}
+
+// ── per-command flag validation (AXI principle 6: fail loud on unknown flags) ─
+
+/**
+ * Flags allowed on every command. --team/--space/--folder/--list/--path are
+ * context flags stripped by parseContextArgs/withContext before a command sees
+ * them; --help always passes. All are never reported as unknown.
+ */
+const GLOBAL_FLAGS = new Set(["--help", "--team", "--space", "--folder", "--list", "--path"]);
+
+/**
+ * Reject unknown flags before any dependency call (exit 2). Globals
+ * (context flags, already stripped, plus --help) are always allowed.
+ * Lists the command's valid flags inline so the agent self-corrects in
+ * one turn — mirroring tg-axi's rejectUnknownFlags.
+ */
+export function rejectUnknownFlags(args: string[], known: string[], commandPath: string): void {
+  for (const arg of args) {
+    if (!arg.startsWith("--")) continue;
+    const name = arg.includes("=") ? arg.slice(0, arg.indexOf("=")) : arg;
+    if (known.includes(name) || GLOBAL_FLAGS.has(name)) continue;
+    throw new AxiError(`unknown flag ${name} for \`${commandPath}\``, "VALIDATION_ERROR", [
+      `valid flags for \`${commandPath}\`: ${[...known, "--help"].join(", ")}`,
+      "(--help always allowed; context flags are placed after the command)",
+    ]);
   }
 }

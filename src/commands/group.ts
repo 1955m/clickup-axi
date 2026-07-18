@@ -14,7 +14,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const GROUP_HELP = `usage: clickup-axi group <subcommand> [flags]
 subcommands[4]:
@@ -58,6 +58,7 @@ const listSchema: FieldDef<ClickupGroup>[] = [
 ];
 
 async function listGroups(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "group list");
   void args;
   const body = await get<{ groups?: ClickupGroup[] }>(`/group`);
   const groups = body?.groups ?? [];
@@ -69,11 +70,26 @@ async function listGroups(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function createGroup(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--name", "--team", "--member", "--handle", "--execute", "--dry-run"],
+    "group create",
+  );
   const name = getFlag(args, "--name");
-  if (!name) throw new AxiError("--name is required: clickup-axi group create --name \"...\"", "VALIDATION_ERROR");
+  if (!name)
+    throw new AxiError(
+      '--name is required: clickup-axi group create --name "..."',
+      "VALIDATION_ERROR",
+    );
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
-  const members = getAllFlags(args, "--member").map((m) => Number(m)).filter((n) => !isNaN(n));
-  if (members.length === 0) throw new AxiError("--member <user-id> (repeatable, at least one) is required", "VALIDATION_ERROR");
+  const members = getAllFlags(args, "--member")
+    .map((m) => Number(m))
+    .filter((n) => !isNaN(n));
+  if (members.length === 0)
+    throw new AxiError(
+      "--member <user-id> (repeatable, at least one) is required",
+      "VALIDATION_ERROR",
+    );
   const handle = getFlag(args, "--handle");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   const payload: Record<string, unknown> = { name, members };
@@ -101,12 +117,22 @@ async function createGroup(args: string[], ctx: ClickupContext): Promise<string>
 }
 
 async function updateGroup(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--name", "--handle", "--add-member", "--remove-member", "--execute", "--dry-run"],
+    "group update",
+  );
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Group ID is required: clickup-axi group update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Group ID is required: clickup-axi group update <id>", "VALIDATION_ERROR");
   const name = getFlag(args, "--name");
   const handle = getFlag(args, "--handle");
-  const add = getAllFlags(args, "--add-member").map((m) => Number(m)).filter((n) => !isNaN(n));
-  const rem = getAllFlags(args, "--remove-member").map((m) => Number(m)).filter((n) => !isNaN(n));
+  const add = getAllFlags(args, "--add-member")
+    .map((m) => Number(m))
+    .filter((n) => !isNaN(n));
+  const rem = getAllFlags(args, "--remove-member")
+    .map((m) => Number(m))
+    .filter((n) => !isNaN(n));
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   const payload: Record<string, unknown> = {};
   if (name) payload["name"] = name;
@@ -130,8 +156,10 @@ async function updateGroup(args: string[], ctx: ClickupContext): Promise<string>
 }
 
 async function deleteGroup(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--execute", "--dry-run"], "group delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Group ID is required: clickup-axi group delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Group ID is required: clickup-axi group delete <id>", "VALIDATION_ERROR");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([

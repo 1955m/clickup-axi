@@ -2,9 +2,7 @@ import { readFileSync } from "node:fs";
 import { AxiError } from "./errors.js";
 
 function defaultSuggestions(label: string): string[] {
-  return [
-    `Use --body "..." for inline ${label}, or --body-file <path> for markdown from a file`,
-  ];
+  return [`Use --body "..." for inline ${label}, or --body-file <path> for markdown from a file`];
 }
 
 function isMissingValue(value: string | undefined): boolean {
@@ -35,9 +33,7 @@ function takeFlagMatches(
       if (arg === flag) {
         const next = args[index + 1];
         const value =
-          next !== undefined && !isValueBoundary(next, valueBoundaryFlags)
-            ? next
-            : undefined;
+          next !== undefined && !isValueBoundary(next, valueBoundaryFlags) ? next : undefined;
         const consumeCount = value === undefined ? 1 : 2;
         args.splice(index, consumeCount);
         index--;
@@ -58,11 +54,7 @@ function takeFlagMatches(
   return matches;
 }
 
-function readBodyFile(
-  flag: string,
-  path: string,
-  suggestions: string[],
-): string {
+function readBodyFile(flag: string, path: string, suggestions: string[]): string {
   try {
     return readFileSync(path, "utf8");
   } catch (error) {
@@ -104,11 +96,7 @@ export function takeBody(args: string[], options: TakeBodyOptions = {}): string 
   const inlineFlags = options.inlineFlags ?? ["--body"];
   const fileFlags = options.fileFlags ?? ["--body-file"];
   const valueBoundaryFlags = [
-    ...new Set([
-      ...inlineFlags,
-      ...fileFlags,
-      ...(options.valueBoundaryFlags ?? []),
-    ]),
+    ...new Set([...inlineFlags, ...fileFlags, ...(options.valueBoundaryFlags ?? [])]),
   ];
   const label = options.label ?? "body";
   const suggestions = options.suggestions ?? defaultSuggestions(label);
@@ -149,9 +137,7 @@ export function takeBody(args: string[], options: TakeBodyOptions = {}): string 
 export function cleanBody(text: string): string {
   let s = text;
   // Strip markdown image embeds: ![alt](url) → [image: alt]
-  s = s.replace(/!\[([^\]]*)\]\([^)]+\)/g, (_m, alt) =>
-    alt ? `[image: ${alt}]` : "[image]",
-  );
+  s = s.replace(/!\[([^\]]*)\]\([^)]+\)/g, (_m, alt) => (alt ? `[image: ${alt}]` : "[image]"));
   // Strip long URLs (>80 chars) in markdown links: [text](longurl) → [text]
   s = s.replace(/\[([^\]]+)\]\(([^)]{80,})\)/g, "[$1]");
   // Strip standalone long URLs (>100 chars) not in markdown

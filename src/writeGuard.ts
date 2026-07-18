@@ -24,16 +24,11 @@ export interface WriteGateResult {
 }
 
 /** Resolve whether a write operation should execute or stay a dry-run. */
-export function resolveWriteGate(
-  executeFlag: boolean,
-  dryRunFlag: boolean,
-): WriteGateResult {
+export function resolveWriteGate(executeFlag: boolean, dryRunFlag: boolean): WriteGateResult {
   if (dryRunFlag && executeFlag) {
-    throw new AxiError(
-      "Cannot combine --dry-run and --execute — choose one",
-      "VALIDATION_ERROR",
-      ["--dry-run (default) previews the mutation; --execute applies it to ClickUp"],
-    );
+    throw new AxiError("Cannot combine --dry-run and --execute — choose one", "VALIDATION_ERROR", [
+      "--dry-run (default) previews the mutation; --execute applies it to ClickUp",
+    ]);
   }
   const envExecute = (process.env["FM_CLICKUP_EXECUTE"] ?? "").trim() === "1";
   const execute = executeFlag || envExecute;

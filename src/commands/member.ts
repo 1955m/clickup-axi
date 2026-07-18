@@ -14,7 +14,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const MEMBER_HELP = `usage: clickup-axi member <subcommand> [flags]
 subcommands[6]:
@@ -47,10 +47,21 @@ const memberSchema: FieldDef<ClickupMember>[] = [
   field("id"),
   field("username"),
   field("email"),
-  custom("role", (m) => (m.role === 1 ? "owner" : m.role === 2 ? "admin" : m.role === 3 ? "member" : m.role === 4 ? "guest" : String(m.role ?? "unknown"))),
+  custom("role", (m) =>
+    m.role === 1
+      ? "owner"
+      : m.role === 2
+        ? "admin"
+        : m.role === 3
+          ? "member"
+          : m.role === 4
+            ? "guest"
+            : String(m.role ?? "unknown"),
+  ),
 ];
 
 async function taskMembers(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task"], "member task");
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   const body = await get<{ members?: ClickupMember[] }>(`/task/${taskId}/member`);
@@ -63,6 +74,7 @@ async function taskMembers(args: string[], ctx: ClickupContext): Promise<string>
 }
 
 async function listMembers(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--list"], "member list");
   const listId = getFlag(args, "--list") ?? ctx.listId;
   if (!listId) throw new AxiError("--list <id> is required", "VALIDATION_ERROR");
   const body = await get<{ members?: ClickupMember[] }>(`/list/${listId}/member`);
@@ -75,8 +87,10 @@ async function listMembers(args: string[], ctx: ClickupContext): Promise<string>
 }
 
 async function viewGuest(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--team"], "member guest");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Guest ID is required: clickup-axi member guest <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Guest ID is required: clickup-axi member guest <id>", "VALIDATION_ERROR");
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const guest = await get<ClickupMember>(`/team/${teamId}/guest/${id}`);
   return renderOutput([
@@ -86,6 +100,21 @@ async function viewGuest(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function inviteGuest(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--email",
+      "--can-edit-tags",
+      "--can-see-time-spent",
+      "--can-see-time-estimated",
+      "--can-create-views",
+      "--can-see-points-estimated",
+      "--custom-role",
+      "--execute",
+      "--dry-run",
+    ],
+    "member guest-invite",
+  );
   const email = getFlag(args, "--email");
   if (!email) throw new AxiError("--email <email> is required", "VALIDATION_ERROR");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
@@ -104,7 +133,9 @@ async function inviteGuest(args: string[], ctx: ClickupContext): Promise<string>
         field("status"),
         field("payload"),
       ]),
-      renderHelp(["Add --execute to invite this guest to the ClickUp workspace (Enterprise plan required)"]),
+      renderHelp([
+        "Add --execute to invite this guest to the ClickUp workspace (Enterprise plan required)",
+      ]),
     ]);
   }
   const created = await post<{ guest?: { id?: number; username?: string; email?: string } }>(
@@ -137,19 +168,30 @@ function resolveGuestScope(args: string[], ctx: ClickupContext): GuestScope | un
 }
 
 async function addGuest(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--guest", "--task", "--list", "--folder", "--execute", "--dry-run"],
+    "member guest-add",
+  );
   const guestId = getFlag(args, "--guest");
   if (!guestId) throw new AxiError("--guest <id> is required", "VALIDATION_ERROR");
   const scope = resolveGuestScope(args, ctx);
-  if (!scope) throw new AxiError("--task <id> | --list <id> | --folder <id> is required to scope the guest", "VALIDATION_ERROR");
+  if (!scope)
+    throw new AxiError(
+      "--task <id> | --list <id> | --folder <id> is required to scope the guest",
+      "VALIDATION_ERROR",
+    );
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("guest-add", { guest: guestId, scope: scope.scope, status: writeGateLabel(gate) }, [
-        field("guest"),
-        field("scope"),
-        field("status"),
+      renderDetail(
+        "guest-add",
+        { guest: guestId, scope: scope.scope, status: writeGateLabel(gate) },
+        [field("guest"), field("scope"), field("status")],
+      ),
+      renderHelp([
+        "Add --execute to share this with the guest in ClickUp (Enterprise plan required)",
       ]),
-      renderHelp(["Add --execute to share this with the guest in ClickUp (Enterprise plan required)"]),
     ]);
   }
   await post(`${scope.path}/${guestId}`, {});
@@ -164,19 +206,30 @@ async function addGuest(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function removeGuest(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--guest", "--task", "--list", "--folder", "--execute", "--dry-run"],
+    "member guest-remove",
+  );
   const guestId = getFlag(args, "--guest");
   if (!guestId) throw new AxiError("--guest <id> is required", "VALIDATION_ERROR");
   const scope = resolveGuestScope(args, ctx);
-  if (!scope) throw new AxiError("--task <id> | --list <id> | --folder <id> is required to scope the guest", "VALIDATION_ERROR");
+  if (!scope)
+    throw new AxiError(
+      "--task <id> | --list <id> | --folder <id> is required to scope the guest",
+      "VALIDATION_ERROR",
+    );
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("guest-remove", { guest: guestId, scope: scope.scope, status: writeGateLabel(gate) }, [
-        field("guest"),
-        field("scope"),
-        field("status"),
+      renderDetail(
+        "guest-remove",
+        { guest: guestId, scope: scope.scope, status: writeGateLabel(gate) },
+        [field("guest"), field("scope"), field("status")],
+      ),
+      renderHelp([
+        "Add --execute to revoke this guest's access in ClickUp (Enterprise plan required)",
       ]),
-      renderHelp(["Add --execute to revoke this guest's access in ClickUp (Enterprise plan required)"]),
     ]);
   }
   await del(`${scope.path}/${guestId}`);

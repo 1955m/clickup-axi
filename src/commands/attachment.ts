@@ -15,7 +15,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const ATTACHMENT_HELP = `usage: clickup-axi attachment <subcommand> [flags]
 subcommands[2]:
@@ -37,11 +37,20 @@ interface ClickupAttachment {
   date_created?: string | number;
 }
 
-const listSchema: FieldDef<ClickupAttachment>[] = [field("id"), field("title"), field("date_created")];
+const listSchema: FieldDef<ClickupAttachment>[] = [
+  field("id"),
+  field("title"),
+  field("date_created"),
+];
 
 async function listAttachments(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task"], "attachment list");
   const taskId = getFlag(args, "--task");
-  if (!taskId) throw new AxiError("--task <id> is required: clickup-axi attachment list --task <id>", "VALIDATION_ERROR");
+  if (!taskId)
+    throw new AxiError(
+      "--task <id> is required: clickup-axi attachment list --task <id>",
+      "VALIDATION_ERROR",
+    );
   const body = await get<{ attachments?: ClickupAttachment[] }>(`/task/${taskId}/attachments`);
   const attachments = body?.attachments ?? [];
   return renderOutput([
@@ -52,6 +61,7 @@ async function listAttachments(args: string[], ctx: ClickupContext): Promise<str
 }
 
 async function uploadAttachment(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task", "--file", "--execute", "--dry-run"], "attachment upload");
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   const filePath = getFlag(args, "--file");
@@ -73,7 +83,9 @@ async function uploadAttachment(args: string[], ctx: ClickupContext): Promise<st
   // multipart form-data; we hand-build the body to avoid a form-data dep.
   const boundary = `----clickup-axi${Date.now()}`;
   const body = Buffer.concat([
-    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="filename"\r\n\r\n${filename}\r\n`),
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="filename"\r\n\r\n${filename}\r\n`,
+    ),
     Buffer.from(
       `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: application/octet-stream\r\n\r\n`,
     ),
@@ -90,11 +102,11 @@ async function uploadAttachment(args: string[], ctx: ClickupContext): Promise<st
     noAuth: false,
   });
   return renderOutput([
-    renderDetail("uploaded", { id: resp.body?.id ?? null, url: resp.body?.url ?? null, status: "ok" }, [
-      field("id"),
-      field("url"),
-      field("status"),
-    ]),
+    renderDetail(
+      "uploaded",
+      { id: resp.body?.id ?? null, url: resp.body?.url ?? null, status: "ok" },
+      [field("id"), field("url"), field("status")],
+    ),
     renderHelp(getSuggestions({ domain: "attachment", action: "upload", ctx })),
   ]);
 }

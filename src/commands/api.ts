@@ -3,7 +3,7 @@ import { request } from "../clickup.js";
 import { AxiError } from "../errors.js";
 import { getAllFlags, takeFlag } from "../args.js";
 import { cleanBody } from "../body.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const API_HELP = `usage: clickup-axi api [<method>] <path>
 description: Make an authenticated ClickUp API v2 request. Defaults to GET.
@@ -24,6 +24,7 @@ const LONG_STRING_CLEANUP_THRESHOLD = 200;
 
 export async function apiCommand(args: string[], _ctx: ClickupContext): Promise<string> {
   if (args[0] === "--help" || args.length === 0) return API_HELP;
+  rejectUnknownFlags(args, ["--query", "-q", "--header", "-H", "--body", "--body-file"], "api");
 
   // Positionals: optional method then path. Flags: --query/-q, --body/--body-file, --header/-H.
   const positionals: string[] = [];
@@ -48,7 +49,10 @@ export async function apiCommand(args: string[], _ctx: ClickupContext): Promise<
     method = "GET";
     path = positionals[0];
   } else {
-    throw new AxiError("API path is required: clickup-axi api [<method>] <path>", "VALIDATION_ERROR");
+    throw new AxiError(
+      "API path is required: clickup-axi api [<method>] <path>",
+      "VALIDATION_ERROR",
+    );
   }
 
   // Build query params from repeatable --query key=value (only the value side
@@ -59,7 +63,10 @@ export async function apiCommand(args: string[], _ctx: ClickupContext): Promise<
   for (const pair of queryPairs) {
     const eq = pair.indexOf("=");
     if (eq <= 0) {
-      throw new AxiError(`Invalid --query value: ${pair}. Use --query key=value`, "VALIDATION_ERROR");
+      throw new AxiError(
+        `Invalid --query value: ${pair}. Use --query key=value`,
+        "VALIDATION_ERROR",
+      );
     }
     const key = pair.slice(0, eq);
     const value = pair.slice(eq + 1);
@@ -83,7 +90,10 @@ export async function apiCommand(args: string[], _ctx: ClickupContext): Promise<
   for (const pair of headerPairs) {
     const colon = pair.indexOf(":");
     if (colon <= 0) {
-      throw new AxiError(`Invalid --header value: ${pair}. Use --header Key:Value`, "VALIDATION_ERROR");
+      throw new AxiError(
+        `Invalid --header value: ${pair}. Use --header Key:Value`,
+        "VALIDATION_ERROR",
+      );
     }
     headers[pair.slice(0, colon).trim()] = pair.slice(colon + 1).trim();
   }

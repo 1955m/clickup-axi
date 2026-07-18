@@ -1,4 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { main, DESCRIPTION } from "./cli.js";
 import { createSkillMarkdown } from "./skill.js";
 import { setFetchImpl } from "./clickup.js";
@@ -75,6 +78,26 @@ describe("main (in-process, no network)", () => {
     expect(text).toContain("space:");
     expect(text).toContain("spaces:");
   });
+
+  it("rejects an unknown flag on a subcommand with VALIDATION_ERROR (AXI P6)", async () => {
+    // rejectUnknownFlags runs before any dependency call, so no fetch happens.
+    const out = capture();
+    await main({ argv: ["task", "list", "--bogus"], stdout: out.stdout });
+    const text = out.chunks.join("");
+    expect(text).toContain("VALIDATION_ERROR");
+    expect(text).toContain("unknown flag --bogus");
+    expect(text).toContain("`task list`");
+    // the self-correcting valid-flag list is folded in
+    expect(text).toContain("--status");
+  });
+
+  it("allows --help on a subcommand even when not in its known-flag set", async () => {
+    const out = capture();
+    await main({ argv: ["task", "list", "--help"], stdout: out.stdout });
+    const text = out.chunks.join("");
+    expect(text).toContain("subcommands");
+    expect(text).not.toContain("unknown flag");
+  });
 });
 
 describe("createSkillMarkdown", () => {
@@ -97,5 +120,15 @@ describe("createSkillMarkdown", () => {
     expect(md).not.toMatch(/mcpServers\.clickup\.env[^.]*>\s*AWS/);
     expect(md).toContain("--dry-run");
     expect(md).toContain("--execute");
+  });
+
+  it("committed SKILL.md matches createSkillMarkdown() (AXI P7: no skill drift)", () => {
+    // Mirrors the CI docs:check gate (build:skill + git diff --exit-code --
+    // skills/). If this fails, run `pnpm run build:skill` and commit the
+    // regenerated skills/clickup-axi/SKILL.md.
+    const here = fileURLToPath(import.meta.url);
+    const dir = join(here, "..", "..", "skills", "clickup-axi");
+    const committed = readFileSync(join(dir, "SKILL.md"), "utf8");
+    expect(committed).toBe(`${createSkillMarkdown()}\n`);
   });
 });

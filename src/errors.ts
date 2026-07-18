@@ -56,10 +56,7 @@ const patterns: ErrorPattern[] = [
     match: (e) => e.status === 429,
     code: "RATE_LIMITED",
     message: () => "ClickUp API rate limit hit (100 req/min) — backoff exhausted",
-    suggestions: () => [
-      "Wait ~60s before retrying",
-      "Reduce page size with --per-page",
-    ],
+    suggestions: () => ["Wait ~60s before retrying", "Reduce page size with --per-page"],
   },
   {
     match: (e) => e.status === 404,

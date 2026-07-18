@@ -1,12 +1,6 @@
 import { get, post, put, del } from "../clickup.js";
 import { AxiError } from "../errors.js";
-import {
-  getFlag,
-  takeFlag,
-  getAllFlags,
-  hasFlag,
-  getPositional,
-} from "../args.js";
+import { getFlag, takeFlag, getAllFlags, hasFlag, getPositional } from "../args.js";
 import { takeBody, truncateBody } from "../body.js";
 import { parseFields } from "../fields.js";
 import {
@@ -32,7 +26,7 @@ import {
   type ClickupField,
   type FieldIndex,
 } from "../customFields.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const TASK_HELP = `usage: clickup-axi task <subcommand> [flags]
 subcommands[12]:
@@ -112,7 +106,7 @@ const listSchema: FieldDef<ClickupTask>[] = [
   field("name"),
   custom("status", (t) => t.status?.status ?? "none"),
   pluck("creator", "username", "creator"),
-  custom("assignees", (t) => (t.assignees?.map((a) => a.username ?? a.id).join(",") || "none")),
+  custom("assignees", (t) => t.assignees?.map((a) => a.username ?? a.id).join(",") || "none"),
   custom("due", (t) => formatEpoch(t.due_date)),
   custom("created", (t) => formatEpoch(t.date_created)),
 ];
@@ -122,11 +116,11 @@ const TASK_LIST_EXTRA_FIELDS: Record<string, { jsonKey: string; def: FieldDef<Cl
   url: { jsonKey: "url", def: field("url") },
   priority: {
     jsonKey: "priority",
-    def: custom("priority", (t) => (t.priority?.priority ?? "none")),
+    def: custom("priority", (t) => t.priority?.priority ?? "none"),
   },
   tags: {
     jsonKey: "tags",
-    def: custom("tags", (t) => (t.tags?.map((x) => x.name).join(",") || "none")),
+    def: custom("tags", (t) => t.tags?.map((x) => x.name).join(",") || "none"),
   },
   time_spent: {
     jsonKey: "time_spent",
@@ -139,8 +133,8 @@ const viewSchema: FieldDef<ClickupTask>[] = [
   field("name"),
   custom("status", (t) => `${t.status?.status ?? "none"} (${t.status?.type ?? "unknown"})`),
   pluck("creator", "username", "creator"),
-  custom("assignees", (t) => (t.assignees?.map((a) => a.username ?? a.id).join(",") || "none")),
-  custom("priority", (t) => (t.priority?.priority ?? "none")),
+  custom("assignees", (t) => t.assignees?.map((a) => a.username ?? a.id).join(",") || "none"),
+  custom("priority", (t) => t.priority?.priority ?? "none"),
   custom("due", (t) => formatEpoch(t.due_date)),
   custom("created", (t) => formatEpoch(t.date_created)),
   custom("description", (t) => truncateBody(t.description, 500)),
@@ -152,11 +146,12 @@ const viewSchemaFull: FieldDef<ClickupTask>[] = viewSchema.map((f) =>
     : f,
 );
 
-const customFieldSchema: FieldDef<{ name: string; id?: string; value: unknown; field: ClickupField }>[] = [
-  field("name"),
-  field("id"),
-  custom("value", (item) => resolveFieldValue(item.field)),
-];
+const customFieldSchema: FieldDef<{
+  name: string;
+  id?: string;
+  value: unknown;
+  field: ClickupField;
+}>[] = [field("name"), field("id"), custom("value", (item) => resolveFieldValue(item.field))];
 
 interface ClickupComment {
   id?: string;
@@ -190,6 +185,21 @@ function formatEpoch(value: string | number | null | undefined): string {
 }
 
 async function taskList(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--fields",
+      "--list",
+      "--status",
+      "--assignee",
+      "--include-closed",
+      "--subtasks",
+      "--page",
+      "--per-page",
+      "--search",
+    ],
+    "task list",
+  );
   const fieldsArg = takeFlag(args, "--fields");
   const { extraDefs } = parseFields(fieldsArg, TASK_LIST_EXTRA_FIELDS);
   const listId = takeFlag(args, "--list") ?? ctx.listId;
@@ -244,10 +254,12 @@ async function taskList(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function taskView(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--comments", "--full"], "task view");
   const withComments = hasFlag(args, "--comments");
   const full = hasFlag(args, "--full");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Task ID is required: clickup-axi task view <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Task ID is required: clickup-axi task view <id>", "VALIDATION_ERROR");
   const task = await get<ClickupTask>(`/task/${id}`);
   const schema = full ? viewSchemaFull : viewSchema;
   const blocks: (string | undefined)[] = [renderDetail("task", task, schema)];
@@ -272,7 +284,10 @@ async function taskView(args: string[], ctx: ClickupContext): Promise<string> {
 async function resolveSetFields(
   listId: string | undefined,
   setFields: string[],
-): Promise<{ custom_fields: Record<string, unknown>; resolved: Array<{ name: string; value: string }> }> {
+): Promise<{
+  custom_fields: Record<string, unknown>;
+  resolved: Array<{ name: string; value: string }>;
+}> {
   const custom_fields: Record<string, unknown> = {};
   const resolved: Array<{ name: string; value: string }> = [];
   if (setFields.length === 0) return { custom_fields, resolved };
@@ -304,6 +319,23 @@ async function resolveSetFields(
 }
 
 async function taskCreate(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--name",
+      "--list",
+      "--body",
+      "--body-file",
+      "--status",
+      "--assignee",
+      "--priority",
+      "--due",
+      "--set-field",
+      "--execute",
+      "--dry-run",
+    ],
+    "task create",
+  );
   const name = getFlag(args, "--name");
   if (!name) throw new AxiError("--name is required", "VALIDATION_ERROR");
   const listId = getFlag(args, "--list") ?? ctx.listId;
@@ -330,7 +362,10 @@ async function taskCreate(args: string[], ctx: ClickupContext): Promise<string> 
   if (priority !== undefined) {
     const p = Number(priority);
     if (isNaN(p) || p < 0 || p > 4) {
-      throw new AxiError(`Invalid --priority: ${priority}. Use 0-4 (4=urgent).`, "VALIDATION_ERROR");
+      throw new AxiError(
+        `Invalid --priority: ${priority}. Use 0-4 (4=urgent).`,
+        "VALIDATION_ERROR",
+      );
     }
     payload["priority"] = p;
   }
@@ -355,19 +390,34 @@ async function taskCreate(args: string[], ctx: ClickupContext): Promise<string> 
   }
   const created = await post<ClickupTask>(`/list/${listId}/task`, payload);
   return renderOutput([
-    renderDetail("created", { id: created.id, name: created.name, status: "ok", url: created.url ?? null }, [
-      field("id"),
-      field("name"),
-      field("status"),
-      field("url"),
-    ]),
+    renderDetail(
+      "created",
+      { id: created.id, name: created.name, status: "ok", url: created.url ?? null },
+      [field("id"), field("name"), field("status"), field("url")],
+    ),
     renderHelp(getSuggestions({ domain: "task", action: "create", id: created.id, ctx })),
   ]);
 }
 
 async function taskUpdate(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--name",
+      "--body",
+      "--body-file",
+      "--status",
+      "--priority",
+      "--due",
+      "--set-field",
+      "--execute",
+      "--dry-run",
+    ],
+    "task update",
+  );
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Task ID is required: clickup-axi task update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Task ID is required: clickup-axi task update <id>", "VALIDATION_ERROR");
   const name = getFlag(args, "--name");
   const body = takeBody(args);
   const status = getFlag(args, "--status");
@@ -413,8 +463,10 @@ async function taskUpdate(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function taskDelete(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--execute", "--dry-run"], "task delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Task ID is required: clickup-axi task delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Task ID is required: clickup-axi task delete <id>", "VALIDATION_ERROR");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
@@ -430,8 +482,10 @@ async function taskDelete(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function taskComments(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "task comments");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Task ID is required: clickup-axi task comments <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Task ID is required: clickup-axi task comments <id>", "VALIDATION_ERROR");
   const body = await get<{ comments?: ClickupComment[] }>(`/task/${id}/comment`);
   const comments = body?.comments ?? [];
   return renderOutput([
@@ -442,14 +496,24 @@ async function taskComments(args: string[], ctx: ClickupContext): Promise<string
 }
 
 async function taskCustomFields(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "task custom-fields");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Task ID is required: clickup-axi task custom-fields <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Task ID is required: clickup-axi task custom-fields <id>",
+      "VALIDATION_ERROR",
+    );
   const task = await get<{ custom_fields?: ClickupField[] }>(`/task/${id}`);
   const fields = task?.custom_fields ?? [];
   // Re-key by lowercased name so resolveFieldValue stays consistent with the
   // runtime index (buildFieldIndex pattern).
   const index = buildFieldIndex(fields);
-  const rows = fields.map((f) => ({ name: f.name ?? "(unnamed)", id: f.id, value: undefined, field: index.get((f.name ?? "").toLowerCase()) ?? f }));
+  const rows = fields.map((f) => ({
+    name: f.name ?? "(unnamed)",
+    id: f.id,
+    value: undefined,
+    field: index.get((f.name ?? "").toLowerCase()) ?? f,
+  }));
   return renderOutput([
     formatCountLine({ count: rows.length }),
     renderList("custom_fields", rows, customFieldSchema),
@@ -472,18 +536,26 @@ const depSchema: FieldDef<ClickupDependency>[] = [
 
 async function taskDependencies(args: string[], ctx: ClickupContext): Promise<string> {
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Task ID is required: clickup-axi task dependencies <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Task ID is required: clickup-axi task dependencies <id>",
+      "VALIDATION_ERROR",
+    );
   const rest = args.slice(1);
   const sub = rest[0];
   if (sub === "add" || sub === "delete") {
-    return sub === "add" ? depAdd([id, ...rest.slice(1)], ctx) : depDelete([id, ...rest.slice(1)], ctx);
+    return sub === "add"
+      ? depAdd([id, ...rest.slice(1)], ctx)
+      : depDelete([id, ...rest.slice(1)], ctx);
   }
+  rejectUnknownFlags(args, [], "task dependencies");
   // ClickUp exposes NO GET /task/<id>/dependency (HTTP 405). Dependencies are
   // embedded in the task object as `dependencies` (tasks this one waits on)
   // and `linked_tasks` (reverse links). Read them from there.
-  const task = await get<{ dependencies?: ClickupDependency[]; linked_tasks?: ClickupDependency[] }>(
-    `/task/${id}`,
-  );
+  const task = await get<{
+    dependencies?: ClickupDependency[];
+    linked_tasks?: ClickupDependency[];
+  }>(`/task/${id}`);
   const deps = [...(task?.dependencies ?? []), ...(task?.linked_tasks ?? [])];
   return renderOutput([
     formatCountLine({ count: deps.length }),
@@ -493,6 +565,11 @@ async function taskDependencies(args: string[], ctx: ClickupContext): Promise<st
 }
 
 async function depAdd(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--depends-on", "--type", "--execute", "--dry-run"],
+    "task dependencies add",
+  );
   const id = args[0];
   const dependsOn = getFlag(args, "--depends-on");
   if (!dependsOn) throw new AxiError("--depends-on <task-id> is required", "VALIDATION_ERROR");
@@ -500,12 +577,11 @@ async function depAdd(args: string[], ctx: ClickupContext): Promise<string> {
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("dependency", { task: id, depends_on: dependsOn, type, status: writeGateLabel(gate) }, [
-        field("task"),
-        field("depends_on"),
-        field("type"),
-        field("status"),
-      ]),
+      renderDetail(
+        "dependency",
+        { task: id, depends_on: dependsOn, type, status: writeGateLabel(gate) },
+        [field("task"), field("depends_on"), field("type"), field("status")],
+      ),
       renderHelp(["Add --execute to create this dependency in ClickUp"]),
     ]);
   }
@@ -526,6 +602,11 @@ async function depAdd(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function depDelete(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--depends-on", "--type", "--execute", "--dry-run"],
+    "task dependencies delete",
+  );
   const id = args[0];
   const dependsOn = getFlag(args, "--depends-on");
   if (!dependsOn) throw new AxiError("--depends-on <task-id> is required", "VALIDATION_ERROR");
@@ -533,12 +614,11 @@ async function depDelete(args: string[], ctx: ClickupContext): Promise<string> {
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("dependency", { task: id, depends_on: dependsOn, type, status: writeGateLabel(gate) }, [
-        field("task"),
-        field("depends_on"),
-        field("type"),
-        field("status"),
-      ]),
+      renderDetail(
+        "dependency",
+        { task: id, depends_on: dependsOn, type, status: writeGateLabel(gate) },
+        [field("task"), field("depends_on"), field("type"), field("status")],
+      ),
       renderHelp(["Add --execute to delete this dependency in ClickUp"]),
     ]);
   }
@@ -602,11 +682,17 @@ interface ClickupStatusDuration {
 }
 
 async function taskTimeInStatus(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "task time-in-status");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Task ID is required: clickup-axi task time-in-status <id>", "VALIDATION_ERROR");
-  const body = await get<{ current_status?: ClickupStatusDuration; status_history?: ClickupStatusDuration[] }>(
-    `/task/${id}/time_in_status`,
-  );
+  if (!id)
+    throw new AxiError(
+      "Task ID is required: clickup-axi task time-in-status <id>",
+      "VALIDATION_ERROR",
+    );
+  const body = await get<{
+    current_status?: ClickupStatusDuration;
+    status_history?: ClickupStatusDuration[];
+  }>(`/task/${id}/time_in_status`);
   const cur = body?.current_status;
   const history = body?.status_history ?? [];
   const curRow = cur ? `${cur.status ?? "?"} (${formatDuration(cur.total_time)})` : "none";
@@ -636,11 +722,19 @@ function formatDuration(ms: number | undefined): string {
 }
 
 async function taskMerge(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task", "--execute", "--dry-run"], "task merge");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Target Task ID is required: clickup-axi task merge <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Target Task ID is required: clickup-axi task merge <id>",
+      "VALIDATION_ERROR",
+    );
   const sourceTaskIds = getAllFlags(args, "--task");
   if (sourceTaskIds.length === 0) {
-    throw new AxiError("--task <source-id> is required (repeatable; the tasks to merge INTO the target)", "VALIDATION_ERROR");
+    throw new AxiError(
+      "--task <source-id> is required (repeatable; the tasks to merge INTO the target)",
+      "VALIDATION_ERROR",
+    );
   }
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   const payload: Record<string, unknown> = { source_task_ids: sourceTaskIds };
@@ -651,7 +745,9 @@ async function taskMerge(args: string[], ctx: ClickupContext): Promise<string> {
         field("status"),
         field("payload"),
       ]),
-      renderHelp(["Add --execute to merge these tasks in ClickUp (the source tasks are deleted into the target)"]),
+      renderHelp([
+        "Add --execute to merge these tasks in ClickUp (the source tasks are deleted into the target)",
+      ]),
     ]);
   }
   await post(`/task/${id}/merge`, payload);
@@ -666,10 +762,16 @@ async function taskMerge(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function taskAddToList(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--list", "--execute", "--dry-run"], "task add-to-list");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Task ID is required: clickup-axi task add-to-list <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Task ID is required: clickup-axi task add-to-list <id>",
+      "VALIDATION_ERROR",
+    );
   const listId = getFlag(args, "--list") ?? ctx.listId;
-  if (!listId) throw new AxiError("--list <id> is required (the additional list)", "VALIDATION_ERROR");
+  if (!listId)
+    throw new AxiError("--list <id> is required (the additional list)", "VALIDATION_ERROR");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
@@ -678,21 +780,36 @@ async function taskAddToList(args: string[], ctx: ClickupContext): Promise<strin
         field("list"),
         field("status"),
       ]),
-      renderHelp(["Add --execute to add this task to the additional list in ClickUp (requires Tasks in Multiple Lists ClickApp)"]),
+      renderHelp([
+        "Add --execute to add this task to the additional list in ClickUp (requires Tasks in Multiple Lists ClickApp)",
+      ]),
     ]);
   }
   await post(`/list/${listId}/task/${id}`, {});
   return renderOutput([
-    renderDetail("added", { task: id, list: listId, status: "ok" }, [field("task"), field("list"), field("status")]),
+    renderDetail("added", { task: id, list: listId, status: "ok" }, [
+      field("task"),
+      field("list"),
+      field("status"),
+    ]),
     renderHelp(getSuggestions({ domain: "task", action: "update", id, ctx })),
   ]);
 }
 
 async function taskRemoveFromList(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--list", "--execute", "--dry-run"], "task remove-from-list");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Task ID is required: clickup-axi task remove-from-list <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Task ID is required: clickup-axi task remove-from-list <id>",
+      "VALIDATION_ERROR",
+    );
   const listId = getFlag(args, "--list") ?? ctx.listId;
-  if (!listId) throw new AxiError("--list <id> is required (the additional list; cannot be the home list)", "VALIDATION_ERROR");
+  if (!listId)
+    throw new AxiError(
+      "--list <id> is required (the additional list; cannot be the home list)",
+      "VALIDATION_ERROR",
+    );
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
@@ -701,12 +818,18 @@ async function taskRemoveFromList(args: string[], ctx: ClickupContext): Promise<
         field("list"),
         field("status"),
       ]),
-      renderHelp(["Add --execute to remove this task from the additional list in ClickUp (cannot remove the home list)"]),
+      renderHelp([
+        "Add --execute to remove this task from the additional list in ClickUp (cannot remove the home list)",
+      ]),
     ]);
   }
   await del(`/list/${listId}/task/${id}`);
   return renderOutput([
-    renderDetail("removed", { task: id, list: listId, status: "ok" }, [field("task"), field("list"), field("status")]),
+    renderDetail("removed", { task: id, list: listId, status: "ok" }, [
+      field("task"),
+      field("list"),
+      field("status"),
+    ]),
     renderHelp(getSuggestions({ domain: "task", action: "update", id, ctx })),
   ]);
 }

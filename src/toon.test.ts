@@ -53,7 +53,9 @@ describe("extract", () => {
   });
 
   it("custom extractor runs the fn", () => {
-    const out = extract(TASK, [custom("status", (t) => `${(t as { status: { status: string } }).status.status}!`)]);
+    const out = extract(TASK, [
+      custom("status", (t) => `${(t as { status: { status: string } }).status.status}!`),
+    ]);
     expect(out.status).toBe("in progress!");
   });
 
@@ -78,7 +80,9 @@ describe("renderers", () => {
   });
 
   it("renderHelp formats a help[N] block", () => {
-    expect(renderHelp(["do thing one", "do thing two"])).toBe("help[2]:\n  do thing one\n  do thing two");
+    expect(renderHelp(["do thing one", "do thing two"])).toBe(
+      "help[2]:\n  do thing one\n  do thing two",
+    );
     expect(renderHelp([])).toBe("");
   });
 

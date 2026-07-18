@@ -14,7 +14,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const TIME_HELP = `usage: clickup-axi time <subcommand> [flags]
 subcommands[6]:
@@ -57,13 +57,17 @@ const listSchema: FieldDef<ClickupTimeEntry>[] = [
 ];
 
 async function listTime(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task", "--user", "--start", "--end", "--page"], "time list");
   const taskId = getFlag(args, "--task");
   const userId = getFlag(args, "--user");
   const start = getFlag(args, "--start");
   const end = getFlag(args, "--end");
   const page = getFlag(args, "--page") ?? "0";
   if (!taskId && !userId) {
-    throw new AxiError("--task <id> or --user <id> is required to scope time entries", "VALIDATION_ERROR");
+    throw new AxiError(
+      "--task <id> or --user <id> is required to scope time entries",
+      "VALIDATION_ERROR",
+    );
   }
   const params: Record<string, string | undefined> = { page };
   if (taskId) params["task_id"] = taskId;
@@ -71,7 +75,10 @@ async function listTime(args: string[], ctx: ClickupContext): Promise<string> {
   if (start) params["start_date"] = start;
   if (end) params["end_date"] = end;
   const path = taskId ? `/task/${taskId}/time` : `/team/${ctx.teamId}/time_entries`;
-  const body = await get<{ data?: ClickupTimeEntry[]; time_entries?: ClickupTimeEntry[] }>(path, params);
+  const body = await get<{ data?: ClickupTimeEntry[]; time_entries?: ClickupTimeEntry[] }>(
+    path,
+    params,
+  );
   const entries = body?.data ?? body?.time_entries ?? [];
   return renderOutput([
     formatCountLine({ count: entries.length }),
@@ -81,6 +88,21 @@ async function listTime(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function createTime(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--task",
+      "--hours",
+      "--duration",
+      "--description",
+      "--assign",
+      "--start",
+      "--billable",
+      "--execute",
+      "--dry-run",
+    ],
+    "time create",
+  );
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   const hours = getFlag(args, "--hours");
@@ -97,7 +119,12 @@ async function createTime(args: string[], ctx: ClickupContext): Promise<string> 
   const start = getFlag(args, "--start") ?? Date.now().toString();
   const billable = hasFlag(args, "--billable");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
-  const payload: Record<string, unknown> = { duration, description, start: Number(start), billable };
+  const payload: Record<string, unknown> = {
+    duration,
+    description,
+    start: Number(start),
+    billable,
+  };
   if (assign) payload["assignee"] = Number(assign);
   if (!gate.execute) {
     return renderOutput([
@@ -121,6 +148,11 @@ async function createTime(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function startTime(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--task", "--description", "--assign", "--execute", "--dry-run"],
+    "time start",
+  );
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   const description = getFlag(args, "--description") ?? "";
@@ -138,7 +170,9 @@ async function startTime(args: string[], ctx: ClickupContext): Promise<string> {
       renderHelp(["Add --execute to start this timer in ClickUp"]),
     ]);
   }
-  const created = await post<ClickupTimeEntry>(`/team/${ctx.teamId}/time_tracking/start`, payload, { task_id: taskId });
+  const created = await post<ClickupTimeEntry>(`/team/${ctx.teamId}/time_tracking/start`, payload, {
+    task_id: taskId,
+  });
   return renderOutput([
     renderDetail("started", { id: created.id ?? null, task: taskId, status: "ok" }, [
       field("id"),
@@ -150,12 +184,16 @@ async function startTime(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function stopTime(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task", "--execute", "--dry-run"], "time stop");
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   const gate = resolveWriteFlag(args);
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("stop", { task: taskId, status: writeGateLabel(gate) }, [field("task"), field("status")]),
+      renderDetail("stop", { task: taskId, status: writeGateLabel(gate) }, [
+        field("task"),
+        field("status"),
+      ]),
       renderHelp(["Add --execute to stop this timer in ClickUp"]),
     ]);
   }
@@ -167,15 +205,26 @@ async function stopTime(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function getTime(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "time get");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Time entry ID is required: clickup-axi time get <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Time entry ID is required: clickup-axi time get <id>", "VALIDATION_ERROR");
   const entry = await get<ClickupTimeEntry>(`/team/${ctx.teamId}/time_entries/entry/${id}`);
   return renderOutput([renderDetail("time_entry", entry, listSchema), renderHelp([])]);
 }
 
 async function updateTime(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--duration", "--description", "--start", "--billable", "--execute", "--dry-run"],
+    "time update",
+  );
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Time entry ID is required: clickup-axi time update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Time entry ID is required: clickup-axi time update <id>",
+      "VALIDATION_ERROR",
+    );
   const duration = getFlag(args, "--duration");
   const description = getFlag(args, "--description");
   const start = getFlag(args, "--start");
@@ -204,8 +253,13 @@ async function updateTime(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function deleteTime(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--execute", "--dry-run"], "time delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Time entry ID is required: clickup-axi time delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Time entry ID is required: clickup-axi time delete <id>",
+      "VALIDATION_ERROR",
+    );
   const gate = resolveWriteFlag(args);
   if (!gate.execute) {
     return renderOutput([

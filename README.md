@@ -47,96 +47,96 @@ clickup-axi setup auth                        # verify the resolved token + show
 (none)=dashboard, workspace, space, folder, list, task, comment, view, doc, time, tag, attachment, checklist, goal, webhook, member, template, dependency, custom-field, group, chat, api, setup
 ```
 
-| Command | Subcommands | API Version | Notes |
-| --- | --- | --- | --- |
-| `workspace` | list, view, seats, plan, shared, custom-roles, custom-items | v2 | teams the token belongs to; shared shows shared hierarchy |
-| `space` | list, view, create, update, delete | v2 | `--space` scopes; defaults to ExampleSpace `200000000000` |
-| `folder` | list, view, create, update, delete | v2 | `--folder` scopes |
-| `list` | list, view, create, update, delete | v2 | `--list` scopes; folderless lists via `list list --space` |
-| `task` | list, view, create, update, delete, comments, custom-fields, dependencies, time-in-status, merge, add-to-list, remove-from-list | v2 | `--set-field NAME=value` resolves fields by NAME; `time-in-status` needs the ClickApp enabled; `merge` (POST /task/{id}/merge); add-to-list/remove-from-list (Tasks in Multiple Lists) |
-| `comment` | list, view, create, update, delete | v2 | scoped by `--task` or `--view` |
-| `view` | list, get, create, update, delete, tasks | v2 | ClickUp views (list/board/calendar...) |
-| `doc` | search, view, create, page-list, page-view, page-create, page-edit | **v3** | ClickUp moved Docs to API v3; search filters by parent/creator/archived/deleted (no free-text query in v3). page content is markdown. |
-| `time` | list, create, start, stop, get, update, delete | v2 | time tracking |
-| `tag` | list, create, update, delete, add-to-task, remove-from-task | v2 | space-scoped tags |
-| `attachment` | list, upload | v2 | task attachments (multipart upload) |
-| `checklist` | list, create, update, delete, item-create, item-update, item-delete | v2 | list reads from the task body (no dedicated GET endpoint); items scoped by `--checklist` |
-| `goal` | list, view, create, update, delete, key-result-create, key-result-update, key-result-delete | v2 | goals + key results |
-| `webhook` | list, create, update, delete | v2 | health status rendered in list |
-| `member` | task, list, guest, guest-invite, guest-add, guest-remove | v2 | guest-* are Enterprise-plan only |
-| `template` | task-list, list-list, folder-list, task-create, list-create, folder-create | v2 | template IDs carry `t-` prefix; publicly shared templates must be added to workspace library first |
-| `dependency` | add, delete, link, unlink | v2 | add/delete model dependencies (depends-on/dependency-of); link/unlink model task links. Read view at `task dependencies <id>`. |
-| `custom-field` | list, set, remove | v2 | list at list/folder/space/team scope; set/remove resolve field UUID by NAME |
-| `group` | list, create, update, delete | v2 | user groups (the API calls them "teams" in paths) |
-| `chat` | channel-list, channel-view, channel-create, message-list, message-send | **v3 experimental** | ClickUp Chat is v3 and EXPERIMENTAL ("subject to change at any time" per ClickUp). Wrapped explicitly with the v3 experimental caveat. |
-| `api` | `[<method>] <path>` | v2 | raw ClickUp API v2 access |
-| `setup` | token, auth, workspace, readonly, hooks | — | token config, readonly gate inspection, agent SessionStart hooks |
+| Command        | Subcommands                                                                                                                     | API Version         | Notes                                                                                                                                                                                  |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `workspace`    | list, view, seats, plan, shared, custom-roles, custom-items                                                                     | v2                  | teams the token belongs to; shared shows shared hierarchy                                                                                                                              |
+| `space`        | list, view, create, update, delete                                                                                              | v2                  | `--space` scopes; defaults to ExampleSpace `200000000000`                                                                                                                                     |
+| `folder`       | list, view, create, update, delete                                                                                              | v2                  | `--folder` scopes                                                                                                                                                                      |
+| `list`         | list, view, create, update, delete                                                                                              | v2                  | `--list` scopes; folderless lists via `list list --space`                                                                                                                              |
+| `task`         | list, view, create, update, delete, comments, custom-fields, dependencies, time-in-status, merge, add-to-list, remove-from-list | v2                  | `--set-field NAME=value` resolves fields by NAME; `time-in-status` needs the ClickApp enabled; `merge` (POST /task/{id}/merge); add-to-list/remove-from-list (Tasks in Multiple Lists) |
+| `comment`      | list, view, create, update, delete                                                                                              | v2                  | scoped by `--task` or `--view`                                                                                                                                                         |
+| `view`         | list, get, create, update, delete, tasks                                                                                        | v2                  | ClickUp views (list/board/calendar...)                                                                                                                                                 |
+| `doc`          | search, view, create, page-list, page-view, page-create, page-edit                                                              | **v3**              | ClickUp moved Docs to API v3; search filters by parent/creator/archived/deleted (no free-text query in v3). page content is markdown.                                                  |
+| `time`         | list, create, start, stop, get, update, delete                                                                                  | v2                  | time tracking                                                                                                                                                                          |
+| `tag`          | list, create, update, delete, add-to-task, remove-from-task                                                                     | v2                  | space-scoped tags                                                                                                                                                                      |
+| `attachment`   | list, upload                                                                                                                    | v2                  | task attachments (multipart upload)                                                                                                                                                    |
+| `checklist`    | list, create, update, delete, item-create, item-update, item-delete                                                             | v2                  | list reads from the task body (no dedicated GET endpoint); items scoped by `--checklist`                                                                                               |
+| `goal`         | list, view, create, update, delete, key-result-create, key-result-update, key-result-delete                                     | v2                  | goals + key results                                                                                                                                                                    |
+| `webhook`      | list, create, update, delete                                                                                                    | v2                  | health status rendered in list                                                                                                                                                         |
+| `member`       | task, list, guest, guest-invite, guest-add, guest-remove                                                                        | v2                  | guest-* are Enterprise-plan only                                                                                                                                                       |
+| `template`     | task-list, list-list, folder-list, task-create, list-create, folder-create                                                      | v2                  | template IDs carry `t-` prefix; publicly shared templates must be added to workspace library first                                                                                     |
+| `dependency`   | add, delete, link, unlink                                                                                                       | v2                  | add/delete model dependencies (depends-on/dependency-of); link/unlink model task links. Read view at `task dependencies <id>`.                                                         |
+| `custom-field` | list, set, remove                                                                                                               | v2                  | list at list/folder/space/team scope; set/remove resolve field UUID by NAME                                                                                                            |
+| `group`        | list, create, update, delete                                                                                                    | v2                  | user groups (the API calls them "teams" in paths)                                                                                                                                      |
+| `chat`         | channel-list, channel-view, channel-create, message-list, message-send                                                          | **v3 experimental** | ClickUp Chat is v3 and EXPERIMENTAL ("subject to change at any time" per ClickUp). Wrapped explicitly with the v3 experimental caveat.                                                 |
+| `api`          | `[<method>] <path>`                                                                                                             | v2                  | raw ClickUp API v2 access                                                                                                                                                              |
+| `setup`        | token, auth, workspace, readonly, hooks                                                                                         | —                   | token config, readonly gate inspection, agent SessionStart hooks                                                                                                                       |
 
 ### Honest coverage table
 
 Every ClickUp API v2 feature area, its command, and its verified status. Items marked "Enterprise" return FORBIDDEN on non-Enterprise plans.
 
-| Feature Area | Command | API | Status |
-| --- | --- | --- | --- |
-| Authorized user | `setup auth` | v2 GET /user | ✅ |
-| Authorized workspaces (teams) | `workspace list` | v2 GET /team | ✅ |
-| Workspace seats | `workspace seats` | v2 GET /team/{id}/seats | ✅ |
-| Workspace plan | `workspace plan` | v2 GET /team/{id}/plan | ✅ |
-| Custom roles | `workspace custom-roles` | v2 GET /team/{id}/customroles | ✅ |
-| Custom task types | `workspace custom-items` | v2 GET /team/{id}/custom_item | ✅ |
-| Shared hierarchy | `workspace shared` | v2 GET /team/{id}/shared | ✅ |
-| Spaces | `space list/view/create/update/delete` | v2 | ✅ |
-| Folders | `folder list/view/create/update/delete` | v2 | ✅ |
-| Folder from template | `template folder-create` | v2 POST /space/{id}/folder_template/{tid} | ✅ |
-| Lists | `list list/view/create/update/delete` | v2 | ✅ |
-| Folderless lists | `list list --space` | v2 GET /space/{id}/list | ✅ |
-| List from template (folder) | `template list-create --folder` | v2 POST /folder/{id}/list_template/{tid} | ✅ |
-| List from template (space) | `template list-create --space` | v2 POST /space/{id}/list_template/{tid} | ✅ |
-| Tasks | `task list/view/create/update/delete` | v2 | ✅ |
-| Task from template | `template task-create` | v2 POST /list/{id}/taskTemplate/{tid} | ✅ |
-| Task add to list | `task add-to-list` | v2 POST /list/{id}/task/{id} | ✅ (Tasks in Multiple Lists ClickApp) |
-| Task remove from list | `task remove-from-list` | v2 DELETE /list/{id}/task/{id} | ✅ |
-| Task merge | `task merge` | v2 POST /task/{id}/merge | ✅ |
-| Task time in status | `task time-in-status` | v2 GET /task/{id}/time_in_status | ✅ (Total Time in Status ClickApp) |
-| Task bulk time in status | — | v2 GET /task/bulk_time_in_status/task_ids | skipped (narrow use case) |
-| Task time estimates | — | v2 | skipped (Business Plan or above) |
-| Task move | — | — | no dedicated v2 move endpoint; achieved via add-to-list + remove-from-list |
-| Comments | `comment list/view/create/update/delete` | v2 | ✅ |
-| Comment replies | — | v2 POST /comment/{id}/reply | skipped (comments are flat thread by default) |
-| Threaded comments | — | v2 | skipped (v2 threaded comments are a separate surface) |
-| Views | `view list/get/create/update/delete/tasks` | v2 | ✅ |
-| Docs | `doc search/view/create/page-*` | **v3** | ✅ (ClickUp moved Docs to v3) |
-| Custom fields (list) | `custom-field list --list/--folder/--space/--team` | v2 | ✅ |
-| Custom fields (set/remove) | `custom-field set/remove` | v2 | ✅ (by NAME) |
-| Set custom field value | `task create --set-field` / `custom-field set` | v2 POST /task/{id}/field/{fid} | ✅ |
-| Remove custom field value | `custom-field remove` | v2 DELETE /task/{id}/field/{fid} | ✅ |
-| Dependencies | `dependency add/delete` | v2 | ✅ |
-| Task links | `dependency link/unlink` | v2 | ✅ |
-| Dependencies read | `task dependencies <id>` | task body (no GET endpoint) | ✅ (reads embedded arrays) |
-| Checklists | `checklist list/create/update/delete` | v2 | ✅ (list reads task body) |
-| Checklist items | `checklist item-create/item-update/item-delete` | v2 | ✅ |
-| Tags | `tag list/create/update/delete/add-to-task/remove-from-task` | v2 | ✅ |
-| Attachments | `attachment list/upload` | v2 | ✅ |
-| Time tracking | `time list/create/start/stop/get/update/delete` | v2 | ✅ |
-| Time entry history | — | v2 GET /team/{id}/time_entries/{id}/history | skipped (read-only detail) |
-| Time entry tags | — | v2 | skipped (infrequently used) |
-| Goals | `goal list/view/create/update/delete` | v2 | ✅ |
-| Key results | `goal key-result-create/key-result-update/key-result-delete` | v2 | ✅ |
-| Webhooks | `webhook list/create/update/delete` | v2 | ✅ (health in list) |
-| Webhook health | `webhook list` | v2 (embedded) | ✅ |
-| Members | `member task/list` | v2 | ✅ |
-| Guests (Enterprise) | `member guest/guest-invite/guest-add/guest-remove` | v2 | ✅ (Enterprise; dry-run default) |
-| User groups | `group list/create/update/delete` | v2 | ✅ |
-| Task templates | `template task-list` | v2 GET /team/{id}/taskTemplate | ✅ |
-| List templates | `template list-list` | v2 GET /team/{id}/list_template | ✅ |
-| Folder templates | `template folder-list` | v2 GET /team/{id}/folder_template | ✅ |
-| Chat channels | `chat channel-list/channel-view/channel-create` | **v3 experimental** | ✅ (v3; marked experimental) |
-| Chat messages | `chat message-list/message-send` | **v3 experimental** | ✅ (v3; marked experimental) |
-| Chat reactions/replies | — | v3 experimental | skipped (detailed sub-features of v3 experimental chat) |
-| Legacy time tracking | — | v2 | skipped (deprecated; use time group) |
-| Audit logs | — | v2 | skipped (Enterprise Workspace owner only) |
-| Workspace users (Enterprise) | — | v2 GET /team/{id}/user | skipped (Enterprise; narrow use) |
-| OAuth token | — | v2 POST /oauth/token | skipped (personal token only) |
+| Feature Area                  | Command                                                      | API                                         | Status                                                                     |
+| ----------------------------- | ------------------------------------------------------------ | ------------------------------------------- | -------------------------------------------------------------------------- |
+| Authorized user               | `setup auth`                                                 | v2 GET /user                                | ✅                                                                         |
+| Authorized workspaces (teams) | `workspace list`                                             | v2 GET /team                                | ✅                                                                         |
+| Workspace seats               | `workspace seats`                                            | v2 GET /team/{id}/seats                     | ✅                                                                         |
+| Workspace plan                | `workspace plan`                                             | v2 GET /team/{id}/plan                      | ✅                                                                         |
+| Custom roles                  | `workspace custom-roles`                                     | v2 GET /team/{id}/customroles               | ✅                                                                         |
+| Custom task types             | `workspace custom-items`                                     | v2 GET /team/{id}/custom_item               | ✅                                                                         |
+| Shared hierarchy              | `workspace shared`                                           | v2 GET /team/{id}/shared                    | ✅                                                                         |
+| Spaces                        | `space list/view/create/update/delete`                       | v2                                          | ✅                                                                         |
+| Folders                       | `folder list/view/create/update/delete`                      | v2                                          | ✅                                                                         |
+| Folder from template          | `template folder-create`                                     | v2 POST /space/{id}/folder_template/{tid}   | ✅                                                                         |
+| Lists                         | `list list/view/create/update/delete`                        | v2                                          | ✅                                                                         |
+| Folderless lists              | `list list --space`                                          | v2 GET /space/{id}/list                     | ✅                                                                         |
+| List from template (folder)   | `template list-create --folder`                              | v2 POST /folder/{id}/list_template/{tid}    | ✅                                                                         |
+| List from template (space)    | `template list-create --space`                               | v2 POST /space/{id}/list_template/{tid}     | ✅                                                                         |
+| Tasks                         | `task list/view/create/update/delete`                        | v2                                          | ✅                                                                         |
+| Task from template            | `template task-create`                                       | v2 POST /list/{id}/taskTemplate/{tid}       | ✅                                                                         |
+| Task add to list              | `task add-to-list`                                           | v2 POST /list/{id}/task/{id}                | ✅ (Tasks in Multiple Lists ClickApp)                                      |
+| Task remove from list         | `task remove-from-list`                                      | v2 DELETE /list/{id}/task/{id}              | ✅                                                                         |
+| Task merge                    | `task merge`                                                 | v2 POST /task/{id}/merge                    | ✅                                                                         |
+| Task time in status           | `task time-in-status`                                        | v2 GET /task/{id}/time_in_status            | ✅ (Total Time in Status ClickApp)                                         |
+| Task bulk time in status      | —                                                            | v2 GET /task/bulk_time_in_status/task_ids   | skipped (narrow use case)                                                  |
+| Task time estimates           | —                                                            | v2                                          | skipped (Business Plan or above)                                           |
+| Task move                     | —                                                            | —                                           | no dedicated v2 move endpoint; achieved via add-to-list + remove-from-list |
+| Comments                      | `comment list/view/create/update/delete`                     | v2                                          | ✅                                                                         |
+| Comment replies               | —                                                            | v2 POST /comment/{id}/reply                 | skipped (comments are flat thread by default)                              |
+| Threaded comments             | —                                                            | v2                                          | skipped (v2 threaded comments are a separate surface)                      |
+| Views                         | `view list/get/create/update/delete/tasks`                   | v2                                          | ✅                                                                         |
+| Docs                          | `doc search/view/create/page-*`                              | **v3**                                      | ✅ (ClickUp moved Docs to v3)                                              |
+| Custom fields (list)          | `custom-field list --list/--folder/--space/--team`           | v2                                          | ✅                                                                         |
+| Custom fields (set/remove)    | `custom-field set/remove`                                    | v2                                          | ✅ (by NAME)                                                               |
+| Set custom field value        | `task create --set-field` / `custom-field set`               | v2 POST /task/{id}/field/{fid}              | ✅                                                                         |
+| Remove custom field value     | `custom-field remove`                                        | v2 DELETE /task/{id}/field/{fid}            | ✅                                                                         |
+| Dependencies                  | `dependency add/delete`                                      | v2                                          | ✅                                                                         |
+| Task links                    | `dependency link/unlink`                                     | v2                                          | ✅                                                                         |
+| Dependencies read             | `task dependencies <id>`                                     | task body (no GET endpoint)                 | ✅ (reads embedded arrays)                                                 |
+| Checklists                    | `checklist list/create/update/delete`                        | v2                                          | ✅ (list reads task body)                                                  |
+| Checklist items               | `checklist item-create/item-update/item-delete`              | v2                                          | ✅                                                                         |
+| Tags                          | `tag list/create/update/delete/add-to-task/remove-from-task` | v2                                          | ✅                                                                         |
+| Attachments                   | `attachment list/upload`                                     | v2                                          | ✅                                                                         |
+| Time tracking                 | `time list/create/start/stop/get/update/delete`              | v2                                          | ✅                                                                         |
+| Time entry history            | —                                                            | v2 GET /team/{id}/time_entries/{id}/history | skipped (read-only detail)                                                 |
+| Time entry tags               | —                                                            | v2                                          | skipped (infrequently used)                                                |
+| Goals                         | `goal list/view/create/update/delete`                        | v2                                          | ✅                                                                         |
+| Key results                   | `goal key-result-create/key-result-update/key-result-delete` | v2                                          | ✅                                                                         |
+| Webhooks                      | `webhook list/create/update/delete`                          | v2                                          | ✅ (health in list)                                                        |
+| Webhook health                | `webhook list`                                               | v2 (embedded)                               | ✅                                                                         |
+| Members                       | `member task/list`                                           | v2                                          | ✅                                                                         |
+| Guests (Enterprise)           | `member guest/guest-invite/guest-add/guest-remove`           | v2                                          | ✅ (Enterprise; dry-run default)                                           |
+| User groups                   | `group list/create/update/delete`                            | v2                                          | ✅                                                                         |
+| Task templates                | `template task-list`                                         | v2 GET /team/{id}/taskTemplate              | ✅                                                                         |
+| List templates                | `template list-list`                                         | v2 GET /team/{id}/list_template             | ✅                                                                         |
+| Folder templates              | `template folder-list`                                       | v2 GET /team/{id}/folder_template           | ✅                                                                         |
+| Chat channels                 | `chat channel-list/channel-view/channel-create`              | **v3 experimental**                         | ✅ (v3; marked experimental)                                               |
+| Chat messages                 | `chat message-list/message-send`                             | **v3 experimental**                         | ✅ (v3; marked experimental)                                               |
+| Chat reactions/replies        | —                                                            | v3 experimental                             | skipped (detailed sub-features of v3 experimental chat)                    |
+| Legacy time tracking          | —                                                            | v2                                          | skipped (deprecated; use time group)                                       |
+| Audit logs                    | —                                                            | v2                                          | skipped (Enterprise Workspace owner only)                                  |
+| Workspace users (Enterprise)  | —                                                            | v2 GET /team/{id}/user                      | skipped (Enterprise; narrow use)                                           |
+| OAuth token                   | —                                                            | v2 POST /oauth/token                        | skipped (personal token only)                                              |
 
 Plus the SDK built-in `update` / `update --check`.
 
@@ -181,9 +181,12 @@ All output is [TOON](https://www.npmjs.com/package/@toon-format/toon)-encoded: c
 ```sh
 pnpm install
 pnpm build            # tsc -> dist/
-pnpm test             # vitest (141 unit + in-process integration tests; no network)
+pnpm test             # vitest (149 unit + in-process integration tests; no network)
 pnpm lint             # eslint --max-warnings=0
+pnpm format           # prettier --write .
+pnpm format:check     # prettier --check .
 pnpm build:skill      # regenerate skills/clickup-axi/SKILL.md from source
+pnpm docs:check       # build:skill + git diff --exit-code -- skills/ (fails on SKILL.md drift)
 pnpm dev <args>       # run via tsx without building
 ```
 

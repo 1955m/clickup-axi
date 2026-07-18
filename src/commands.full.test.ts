@@ -59,7 +59,13 @@ describe("checklist command", () => {
   it("list reads checklists from the task body (no dedicated GET)", async () => {
     const fetchMock = mockOnce({
       checklists: [
-        { id: "c1", name: "Launch", resolved: 2, unresolved: 1, items: [{ id: "i1", name: "Notify", resolved: false }] },
+        {
+          id: "c1",
+          name: "Launch",
+          resolved: 2,
+          unresolved: 1,
+          items: [{ id: "i1", name: "Notify", resolved: false }],
+        },
       ],
     });
     setFetchImpl(fetchMock as unknown as typeof fetch);
@@ -81,7 +87,10 @@ describe("checklist command", () => {
   it("create --execute POSTs /task/<id>/checklist", async () => {
     const fetchMock = mockOnce({ checklist: { id: "c1", name: "Checks" } });
     setFetchImpl(fetchMock as unknown as typeof fetch);
-    const out = await checklistCommand(["create", "--task", "t1", "--name", "Checks", "--execute"], CTX);
+    const out = await checklistCommand(
+      ["create", "--task", "t1", "--name", "Checks", "--execute"],
+      CTX,
+    );
     expect(initOf(fetchMock).method).toBe("POST");
     expect(urlOf(fetchMock)).toContain("/task/t1/checklist");
     expect(out).toContain("c1");
@@ -90,15 +99,17 @@ describe("checklist command", () => {
   it("item-delete requires --checklist to scope the path", async () => {
     const fetchMock = mockOnce({});
     setFetchImpl(fetchMock as unknown as typeof fetch);
-    await expect(
-      checklistCommand(["item-delete", "i1", "--execute"], CTX),
-    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(checklistCommand(["item-delete", "i1", "--execute"], CTX)).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
   });
 });
 
 describe("goal command", () => {
   it("list GETs /team/<id>/goal", async () => {
-    const fetchMock = mockOnce({ goals: [{ id: "g1", name: "Q3", percent_completed: 40, key_results: [] }] });
+    const fetchMock = mockOnce({
+      goals: [{ id: "g1", name: "Q3", percent_completed: 40, key_results: [] }],
+    });
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await goalCommand(["list"], CTX);
     expect(urlOf(fetchMock)).toContain("/team/1000000000/goal");
@@ -117,7 +128,10 @@ describe("goal command", () => {
   it("key-result-create --execute POSTs /goal/<id>/key_result", async () => {
     const fetchMock = mockOnce({ key_result: { id: "kr1", name: "Uptime" } });
     setFetchImpl(fetchMock as unknown as typeof fetch);
-    const out = await goalCommand(["key-result-create", "--goal", "g1", "--name", "Uptime", "--target", "99", "--execute"], CTX);
+    const out = await goalCommand(
+      ["key-result-create", "--goal", "g1", "--name", "Uptime", "--target", "99", "--execute"],
+      CTX,
+    );
     expect(initOf(fetchMock).method).toBe("POST");
     expect(urlOf(fetchMock)).toContain("/goal/g1/key_result");
     expect(out).toContain("kr1");
@@ -134,7 +148,16 @@ describe("goal command", () => {
 
 describe("webhook command", () => {
   it("list includes health status", async () => {
-    const fetchMock = mockOnce({ webhooks: [{ id: "w1", endpoint: "https://x.com/h", events: ["taskCreated"], health: { status: "healthy" } }] });
+    const fetchMock = mockOnce({
+      webhooks: [
+        {
+          id: "w1",
+          endpoint: "https://x.com/h",
+          events: ["taskCreated"],
+          health: { status: "healthy" },
+        },
+      ],
+    });
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await webhookCommand(["list"], CTX);
     expect(urlOf(fetchMock)).toContain("/team/1000000000/webhook");
@@ -142,14 +165,30 @@ describe("webhook command", () => {
   });
 
   it("create requires --endpoint and --event", async () => {
-    await expect(webhookCommand(["create"], CTX)).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
-    await expect(webhookCommand(["create", "--endpoint", "https://x.com/h"], CTX)).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(webhookCommand(["create"], CTX)).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
+    await expect(
+      webhookCommand(["create", "--endpoint", "https://x.com/h"], CTX),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
   });
 
   it("create --execute POSTs the scoped payload", async () => {
     const fetchMock = mockOnce({ webhook: { id: "w1", endpoint: "https://x.com/h" } });
     setFetchImpl(fetchMock as unknown as typeof fetch);
-    await webhookCommand(["create", "--endpoint", "https://x.com/h", "--event", "taskCreated", "--space", "200000000000", "--execute"], CTX);
+    await webhookCommand(
+      [
+        "create",
+        "--endpoint",
+        "https://x.com/h",
+        "--event",
+        "taskCreated",
+        "--space",
+        "200000000000",
+        "--execute",
+      ],
+      CTX,
+    );
     const body = JSON.parse(String(initOf(fetchMock).body));
     expect(body.events).toEqual(["taskCreated"]);
     expect(body.space_id).toBe(200000000000);
@@ -158,7 +197,9 @@ describe("webhook command", () => {
 
 describe("member command", () => {
   it("task members GETs /task/<id>/member", async () => {
-    const fetchMock = mockOnce({ members: [{ id: 1, username: "ding", email: "a@b.com", role: 3 }] });
+    const fetchMock = mockOnce({
+      members: [{ id: 1, username: "ding", email: "a@b.com", role: 3 }],
+    });
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await memberCommand(["task", "--task", "t1"], CTX);
     expect(urlOf(fetchMock)).toContain("/task/t1/member");
@@ -175,7 +216,9 @@ describe("member command", () => {
   });
 
   it("guest-add requires a scope", async () => {
-    await expect(memberCommand(["guest-add", "--guest", "1"], CTX)).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(memberCommand(["guest-add", "--guest", "1"], CTX)).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
   });
 });
 
@@ -191,7 +234,19 @@ describe("template command", () => {
   it("folder-create --execute POSTs /space/<id>/folder_template/<tid>", async () => {
     const fetchMock = mockOnce({ id: "f1" });
     setFetchImpl(fetchMock as unknown as typeof fetch);
-    await templateCommand(["folder-create", "--space", "200000000000", "--template", "t-9", "--name", "New", "--execute"], CTX);
+    await templateCommand(
+      [
+        "folder-create",
+        "--space",
+        "200000000000",
+        "--template",
+        "t-9",
+        "--name",
+        "New",
+        "--execute",
+      ],
+      CTX,
+    );
     expect(urlOf(fetchMock)).toContain("/space/200000000000/folder_template/t-9");
   });
 });
@@ -223,7 +278,17 @@ describe("dependency command", () => {
 
 describe("custom-field command", () => {
   it("list --list GETs /list/<id>/field", async () => {
-    const fetchMock = mockOnce({ fields: [{ id: "f1", name: "Product", type: "drop_down", value: null, type_config: { options: [{ id: "o1", name: "Backend" }] } }] });
+    const fetchMock = mockOnce({
+      fields: [
+        {
+          id: "f1",
+          name: "Product",
+          type: "drop_down",
+          value: null,
+          type_config: { options: [{ id: "o1", name: "Backend" }] },
+        },
+      ],
+    });
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await customFieldCommand(["list", "--list", "123"], CTX);
     expect(urlOf(fetchMock)).toContain("/list/123/field");
@@ -232,10 +297,20 @@ describe("custom-field command", () => {
 
   it("set resolves field UUID by NAME (read-only GET) then dry-run preview", async () => {
     const fetchMock = mockOnce({
-      fields: [{ id: "066d", name: "Product", type: "drop_down", type_config: { options: [{ id: "o1", name: "Backend" }] } }],
+      fields: [
+        {
+          id: "066d",
+          name: "Product",
+          type: "drop_down",
+          type_config: { options: [{ id: "o1", name: "Backend" }] },
+        },
+      ],
     });
     setFetchImpl(fetchMock as unknown as typeof fetch);
-    const out = await customFieldCommand(["set", "t1", "--field", "Product=Backend", "--list", "123"], CTX);
+    const out = await customFieldCommand(
+      ["set", "t1", "--field", "Product=Backend", "--list", "123"],
+      CTX,
+    );
     // one read-only GET to resolve the field, no POST (dry-run)
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(initOf(fetchMock).method).toBe("GET");
@@ -245,10 +320,24 @@ describe("custom-field command", () => {
 
   it("set --execute POSTs /task/<id>/field/<uuid> with coerced option id", async () => {
     const fetchMock = vi.fn();
-    fetchMock.mockResolvedValueOnce(makeResponse(200, { fields: [{ id: "066d", name: "Product", type: "drop_down", type_config: { options: [{ id: "o1", name: "Backend" }] } }] }));
+    fetchMock.mockResolvedValueOnce(
+      makeResponse(200, {
+        fields: [
+          {
+            id: "066d",
+            name: "Product",
+            type: "drop_down",
+            type_config: { options: [{ id: "o1", name: "Backend" }] },
+          },
+        ],
+      }),
+    );
     fetchMock.mockResolvedValueOnce(makeResponse(200, {}));
     setFetchImpl(fetchMock as unknown as typeof fetch);
-    await customFieldCommand(["set", "t1", "--field", "Product=Backend", "--list", "123", "--execute"], CTX);
+    await customFieldCommand(
+      ["set", "t1", "--field", "Product=Backend", "--list", "123", "--execute"],
+      CTX,
+    );
     const postUrl = String(fetchMock.mock.calls[1][0]);
     const postInit = fetchMock.mock.calls[1][1] as RequestInit;
     expect(postInit.method).toBe("POST");
@@ -259,7 +348,16 @@ describe("custom-field command", () => {
 
 describe("group command", () => {
   it("list GETs /group", async () => {
-    const fetchMock = mockOnce({ groups: [{ id: "g1", name: "On-call", team_id: "1000000000", members: [{ id: 1, username: "ding" }] }] });
+    const fetchMock = mockOnce({
+      groups: [
+        {
+          id: "g1",
+          name: "On-call",
+          team_id: "1000000000",
+          members: [{ id: 1, username: "ding" }],
+        },
+      ],
+    });
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await groupCommand(["list"], CTX);
     expect(urlOf(fetchMock)).toBe("https://api.clickup.com/api/v2/group");
@@ -267,7 +365,9 @@ describe("group command", () => {
   });
 
   it("create dry-run requires --member", async () => {
-    await expect(groupCommand(["create", "--name", "X"], CTX)).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(groupCommand(["create", "--name", "X"], CTX)).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
     const fetchMock = mockOnce({});
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await groupCommand(["create", "--name", "X", "--member", "1"], CTX);
@@ -278,10 +378,14 @@ describe("group command", () => {
 
 describe("chat command (v3)", () => {
   it("channel-list GETs the v3 channels path", async () => {
-    const fetchMock = mockOnce({ data: [{ id: "ch1", name: "general", type: "CHANNEL", visibility: "PUBLIC" }] });
+    const fetchMock = mockOnce({
+      data: [{ id: "ch1", name: "general", type: "CHANNEL", visibility: "PUBLIC" }],
+    });
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await chatCommand(["channel-list"], CTX);
-    expect(urlOf(fetchMock)).toContain("https://api.clickup.com/api/v3/workspaces/1000000000/chat/channels");
+    expect(urlOf(fetchMock)).toContain(
+      "https://api.clickup.com/api/v3/workspaces/1000000000/chat/channels",
+    );
     expect(out).toContain("general");
   });
 
@@ -304,7 +408,10 @@ describe("chat command (v3)", () => {
 
 describe("doc command (v3)", () => {
   it("search GETs the v3 docs path", async () => {
-    const fetchMock = mockOnce({ docs: [{ id: "d1", name: "Runbook", date_created: 0, parent: { id: "s1", type: 4 } }], next_cursor: "cur1" });
+    const fetchMock = mockOnce({
+      docs: [{ id: "d1", name: "Runbook", date_created: 0, parent: { id: "s1", type: 4 } }],
+      next_cursor: "cur1",
+    });
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await docCommand(["search", "--parent-type", "space", "--parent-id", "s1"], CTX);
     expect(urlOf(fetchMock)).toContain("https://api.clickup.com/api/v3/workspaces/1000000000/docs");
@@ -315,13 +422,21 @@ describe("doc command (v3)", () => {
   it("create dry-run (no v3 POST)", async () => {
     const fetchMock = mockOnce({});
     setFetchImpl(fetchMock as unknown as typeof fetch);
-    const out = await docCommand(["create", "--name", "R", "--parent-type", "space", "--parent-id", "s1"], CTX);
+    const out = await docCommand(
+      ["create", "--name", "R", "--parent-type", "space", "--parent-id", "s1"],
+      CTX,
+    );
     expect(fetchMock).not.toHaveBeenCalled();
     expect(out).toContain("dry-run");
   });
 
   it("page-view GETs v3 page and renders content", async () => {
-    const fetchMock = mockOnce({ id: "p1", name: "Step 1", content: "Do the thing", sub_title: "intro" });
+    const fetchMock = mockOnce({
+      id: "p1",
+      name: "Step 1",
+      content: "Do the thing",
+      sub_title: "intro",
+    });
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await docCommand(["page-view", "p1", "--doc", "d1"], CTX);
     expect(urlOf(fetchMock)).toContain("/docs/d1/pages/p1");
@@ -341,7 +456,10 @@ describe("view command (write support)", () => {
   it("create dry-run (no call)", async () => {
     const fetchMock = mockOnce({});
     setFetchImpl(fetchMock as unknown as typeof fetch);
-    const out = await viewCommand(["create", "--name", "Sprint", "--type", "board", "--space", "200000000000"], CTX);
+    const out = await viewCommand(
+      ["create", "--name", "Sprint", "--type", "board", "--space", "200000000000"],
+      CTX,
+    );
     expect(fetchMock).not.toHaveBeenCalled();
     expect(out).toContain("dry-run");
   });
@@ -349,7 +467,10 @@ describe("view command (write support)", () => {
   it("create --execute POSTs /space/<id>/view", async () => {
     const fetchMock = mockOnce({ id: "v1", name: "Sprint", type: "board" });
     setFetchImpl(fetchMock as unknown as typeof fetch);
-    await viewCommand(["create", "--name", "Sprint", "--type", "board", "--space", "200000000000", "--execute"], CTX);
+    await viewCommand(
+      ["create", "--name", "Sprint", "--type", "board", "--space", "200000000000", "--execute"],
+      CTX,
+    );
     expect(urlOf(fetchMock)).toContain("/space/200000000000/view");
     expect(initOf(fetchMock).method).toBe("POST");
   });
@@ -365,7 +486,10 @@ describe("view command (write support)", () => {
 
 describe("task command (new subcommands)", () => {
   it("time-in-status GETs /task/<id>/time_in_status", async () => {
-    const fetchMock = mockOnce({ current_status: { status: "in progress", color: "blue", total_time: 3600000 }, status_history: [] });
+    const fetchMock = mockOnce({
+      current_status: { status: "in progress", color: "blue", total_time: 3600000 },
+      status_history: [],
+    });
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await taskCommand(["time-in-status", "t1"], CTX);
     expect(urlOf(fetchMock)).toContain("/task/t1/time_in_status");
@@ -400,7 +524,10 @@ describe("task command (new subcommands)", () => {
 
 describe("workspace command (extended)", () => {
   it("seats renders member/guest seat counts", async () => {
-    const fetchMock = mockOnce({ members: { filled_members_seats: 3, total_member_seats: 10, empty_member_seats: 7 }, guests: { filled_guests_seats: 1, total_guests_seats: 5, empty_guests_seats: 4 } });
+    const fetchMock = mockOnce({
+      members: { filled_members_seats: 3, total_member_seats: 10, empty_member_seats: 7 },
+      guests: { filled_guests_seats: 1, total_guests_seats: 5, empty_guests_seats: 4 },
+    });
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await workspaceCommand(["seats"], CTX);
     expect(urlOf(fetchMock)).toContain("/team/1000000000/seats");
@@ -415,7 +542,9 @@ describe("workspace command (extended)", () => {
   });
 
   it("shared renders shared hierarchy counts", async () => {
-    const fetchMock = mockOnce({ shared: { tasks: ["t1"], lists: [{ id: "l1", name: "Shared List" }], folders: [] } });
+    const fetchMock = mockOnce({
+      shared: { tasks: ["t1"], lists: [{ id: "l1", name: "Shared List" }], folders: [] },
+    });
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const out = await workspaceCommand(["shared"], CTX);
     expect(out).toContain("Shared List");
@@ -427,7 +556,11 @@ describe("hierarchy --path resolution", () => {
   it("resolves Space/Folder/List by name", async () => {
     const fetchMock = vi.fn();
     fetchMock.mockResolvedValueOnce(makeResponse(200, { spaces: [{ id: "s1", name: "ExampleSpace" }] }));
-    fetchMock.mockResolvedValueOnce(makeResponse(200, { folders: [{ id: "f1", name: "Backend", lists: [{ id: "l1", name: "Roadmap" }] }] }));
+    fetchMock.mockResolvedValueOnce(
+      makeResponse(200, {
+        folders: [{ id: "f1", name: "Backend", lists: [{ id: "l1", name: "Roadmap" }] }],
+      }),
+    );
     setFetchImpl(fetchMock as unknown as typeof fetch);
     const rp = await resolvePath("ExampleSpace/Backend/Roadmap", "1000000000");
     expect(rp.spaceId).toBe("s1");
@@ -449,9 +582,18 @@ describe("hierarchy --path resolution", () => {
 
   it("throws VALIDATION_ERROR listing available names when a segment is unknown", async () => {
     const fetchMock = vi.fn();
-    fetchMock.mockResolvedValueOnce(makeResponse(200, { spaces: [{ id: "s1", name: "ExampleSpace" }, { id: "s2", name: "Ops" }] }));
+    fetchMock.mockResolvedValueOnce(
+      makeResponse(200, {
+        spaces: [
+          { id: "s1", name: "ExampleSpace" },
+          { id: "s2", name: "Ops" },
+        ],
+      }),
+    );
     setFetchImpl(fetchMock as unknown as typeof fetch);
-    await expect(resolvePath("Nope", "1000000000")).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(resolvePath("Nope", "1000000000")).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
   });
 });
 
@@ -461,7 +603,9 @@ describe("readonly gate integration", () => {
     resetReadonlyCache();
     const fetchMock = mockOnce({});
     setFetchImpl(fetchMock as unknown as typeof fetch);
-    await expect(goalCommand(["delete", "g1", "--execute"], CTX)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(goalCommand(["delete", "g1", "--execute"], CTX)).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

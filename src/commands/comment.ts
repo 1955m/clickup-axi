@@ -16,7 +16,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const COMMENT_HELP = `usage: clickup-axi comment <subcommand> [flags]
 subcommands[5]:
@@ -52,6 +52,7 @@ const listSchema: FieldDef<ClickupComment>[] = [
 ];
 
 async function listComments(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task", "--view"], "comment list");
   const taskId = getFlag(args, "--task");
   const viewId = getFlag(args, "--view");
   if (!taskId && !viewId) {
@@ -68,26 +69,42 @@ async function listComments(args: string[], ctx: ClickupContext): Promise<string
 }
 
 async function viewComment(args: string[], _ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task", "--view"], "comment view");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Comment ID is required: clickup-axi comment view <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Comment ID is required: clickup-axi comment view <id>", "VALIDATION_ERROR");
   // ClickUp exposes comments under their container; re-fetch the task's comments
   // and find the one requested.
   const taskId = getFlag(args, "--task");
   const viewId = getFlag(args, "--view");
   if (!taskId && !viewId) {
-    throw new AxiError("--task <id> or --view <id> is required to scope the comment lookup", "VALIDATION_ERROR");
+    throw new AxiError(
+      "--task <id> or --view <id> is required to scope the comment lookup",
+      "VALIDATION_ERROR",
+    );
   }
   const path = taskId ? `/task/${taskId}/comment` : `/view/${viewId}/comment`;
   const body = await get<{ comments?: ClickupComment[] }>(path);
   const comment = (body?.comments ?? []).find((c) => c.id === id);
   if (!comment) throw new AxiError(`Comment ${id} not found in this task/view`, "NOT_FOUND");
-  return renderOutput([
-    renderDetail("comment", comment, listSchema),
-    renderHelp([]),
-  ]);
+  return renderOutput([renderDetail("comment", comment, listSchema), renderHelp([])]);
 }
 
 async function createComment(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--task",
+      "--view",
+      "--body",
+      "--body-file",
+      "--assign",
+      "--resolved",
+      "--execute",
+      "--dry-run",
+    ],
+    "comment create",
+  );
   const taskId = getFlag(args, "--task");
   const viewId = getFlag(args, "--view");
   if (!taskId && !viewId) {
@@ -102,21 +119,36 @@ async function createComment(args: string[], ctx: ClickupContext): Promise<strin
   if (resolved) payload["resolved"] = true;
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("create", { status: writeGateLabel(gate), payload }, [field("status"), field("payload")]),
+      renderDetail("create", { status: writeGateLabel(gate), payload }, [
+        field("status"),
+        field("payload"),
+      ]),
       renderHelp(["Add --execute to post this comment to ClickUp"]),
     ]);
   }
   const path = taskId ? `/task/${taskId}/comment` : `/view/${viewId}/comment`;
   const created = await post<ClickupComment>(path, payload);
   return renderOutput([
-    renderDetail("created", { id: created.id ?? null, status: "ok" }, [field("id"), field("status")]),
+    renderDetail("created", { id: created.id ?? null, status: "ok" }, [
+      field("id"),
+      field("status"),
+    ]),
     renderHelp(getSuggestions({ domain: "comment", action: "create", id: taskId ?? viewId, ctx })),
   ]);
 }
 
 async function updateComment(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--body", "--body-file", "--resolved", "--execute", "--dry-run"],
+    "comment update",
+  );
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Comment ID is required: clickup-axi comment update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Comment ID is required: clickup-axi comment update <id>",
+      "VALIDATION_ERROR",
+    );
   const body = takeBody(args);
   const resolved = hasFlag(args, "--resolved");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
@@ -125,7 +157,11 @@ async function updateComment(args: string[], ctx: ClickupContext): Promise<strin
   if (resolved) payload["resolved"] = true;
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("update", { id, status: writeGateLabel(gate), payload }, [field("id"), field("status"), field("payload")]),
+      renderDetail("update", { id, status: writeGateLabel(gate), payload }, [
+        field("id"),
+        field("status"),
+        field("payload"),
+      ]),
       renderHelp(["Add --execute to apply this update to ClickUp"]),
     ]);
   }
@@ -137,8 +173,13 @@ async function updateComment(args: string[], ctx: ClickupContext): Promise<strin
 }
 
 async function deleteComment(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--execute", "--dry-run"], "comment delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Comment ID is required: clickup-axi comment delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Comment ID is required: clickup-axi comment delete <id>",
+      "VALIDATION_ERROR",
+    );
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([

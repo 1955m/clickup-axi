@@ -1,13 +1,8 @@
 import { encode } from "@toon-format/toon";
 import { get } from "../clickup.js";
-import {
-  field,
-  renderList,
-  renderHelp,
-  renderOutput,
-} from "../toon.js";
+import { field, renderList, renderHelp, renderOutput } from "../toon.js";
 import { getSuggestions } from "../suggestions.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const HOME_HELP = "";
 
@@ -32,7 +27,10 @@ const spaceSchema = [field("id"), field("name")];
 const folderSchema = [field("id"), field("name")];
 const listSchema = [field("id"), field("name")];
 
-async function safeGet<T>(path: string, params?: Record<string, string | undefined>): Promise<T | undefined> {
+async function safeGet<T>(
+  path: string,
+  params?: Record<string, string | undefined>,
+): Promise<T | undefined> {
   try {
     return await get<T>(path, params);
   } catch {
@@ -41,14 +39,14 @@ async function safeGet<T>(path: string, params?: Record<string, string | undefin
 }
 
 export async function homeCommand(_args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(_args, [], "home");
   const blocks: (string | undefined)[] = [];
 
   blocks.push(encode({ team: ctx.teamId, space: ctx.spaceId }));
 
-  const spaceBody = await safeGet<{ spaces?: ClickupSpace[] }>(
-    `/team/${ctx.teamId}/space`,
-    { archived: "false" },
-  );
+  const spaceBody = await safeGet<{ spaces?: ClickupSpace[] }>(`/team/${ctx.teamId}/space`, {
+    archived: "false",
+  });
   const spaces = spaceBody?.spaces ?? [];
   blocks.push(spaces.length ? renderList("spaces", spaces.slice(0, 5), spaceSchema) : "spaces: 0");
 
@@ -59,9 +57,7 @@ export async function homeCommand(_args: string[], ctx: ClickupContext): Promise
   const folders = folderBody?.folders ?? [];
   const folderlessLists = listBody?.lists ?? [];
   blocks.push(
-    folders.length
-      ? renderList("folders", folders.slice(0, 5), folderSchema)
-      : "folders: 0",
+    folders.length ? renderList("folders", folders.slice(0, 5), folderSchema) : "folders: 0",
   );
   blocks.push(
     folderlessLists.length

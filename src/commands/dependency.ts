@@ -1,16 +1,10 @@
 import { post, del } from "../clickup.js";
 import { AxiError } from "../errors.js";
 import { getFlag, hasFlag } from "../args.js";
-import {
-  field,
-  renderDetail,
-  renderHelp,
-  renderOutput,
-  renderError,
-} from "../toon.js";
+import { field, renderDetail, renderHelp, renderOutput, renderError } from "../toon.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const DEPENDENCY_HELP = `usage: clickup-axi dependency <subcommand> [flags]
 subcommands[4]:
@@ -29,11 +23,18 @@ examples:
   clickup-axi dependency add --task <id> --depends-on <other-task-id> --execute
   clickup-axi dependency link --task <id> --to <other-task-id> --execute`;
 
-function resolveDepends(args: string[]): { field: "depends_on" | "dependency_of"; value: string; label: string } {
+function resolveDepends(args: string[]): {
+  field: "depends_on" | "dependency_of";
+  value: string;
+  label: string;
+} {
   const dependsOn = getFlag(args, "--depends-on");
   const dependencyOf = getFlag(args, "--dependency-of");
   if (!dependsOn && !dependencyOf) {
-    throw new AxiError("--depends-on <task-id> (waiting-on) or --dependency-of <task-id> (blocking) is required", "VALIDATION_ERROR");
+    throw new AxiError(
+      "--depends-on <task-id> (waiting-on) or --dependency-of <task-id> (blocking) is required",
+      "VALIDATION_ERROR",
+    );
   }
   if (dependsOn && dependencyOf) {
     throw new AxiError("Use only one of --depends-on or --dependency-of", "VALIDATION_ERROR");
@@ -44,6 +45,11 @@ function resolveDepends(args: string[]): { field: "depends_on" | "dependency_of"
 }
 
 async function addDependency(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--task", "--depends-on", "--dependency-of", "--execute", "--dry-run"],
+    "dependency add",
+  );
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   const { field: depField, value, label } = resolveDepends(args);
@@ -71,6 +77,11 @@ async function addDependency(args: string[], ctx: ClickupContext): Promise<strin
 }
 
 async function deleteDependency(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--task", "--depends-on", "--dependency-of", "--execute", "--dry-run"],
+    "dependency delete",
+  );
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   const { field: depField, value, label } = resolveDepends(args);
@@ -97,10 +108,12 @@ async function deleteDependency(args: string[], ctx: ClickupContext): Promise<st
 }
 
 async function linkTask(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task", "--to", "--execute", "--dry-run"], "dependency link");
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   const linksTo = getFlag(args, "--to");
-  if (!linksTo) throw new AxiError("--to <task-id> is required (the task to link to)", "VALIDATION_ERROR");
+  if (!linksTo)
+    throw new AxiError("--to <task-id> is required (the task to link to)", "VALIDATION_ERROR");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
@@ -124,6 +137,7 @@ async function linkTask(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function unlinkTask(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task", "--to", "--execute", "--dry-run"], "dependency unlink");
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   const linksTo = getFlag(args, "--to");

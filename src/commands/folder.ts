@@ -14,7 +14,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const FOLDER_HELP = `usage: clickup-axi folder <subcommand> [flags]
 subcommands[5]:
@@ -49,12 +49,10 @@ const listSchema: FieldDef<ClickupFolder>[] = [field("id"), field("name"), boolY
 const viewSchema: FieldDef<ClickupFolder>[] = [field("id"), field("name")];
 
 async function listFolders(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--space", "--archived"], "folder list");
   const spaceId = takeFlag(args, "--space") ?? ctx.spaceId;
   const archived = hasFlag(args, "--archived") ? "true" : "false";
-  const body = await get<{ folders?: ClickupFolder[] }>(
-    `/space/${spaceId}/folder`,
-    { archived },
-  );
+  const body = await get<{ folders?: ClickupFolder[] }>(`/space/${spaceId}/folder`, { archived });
   const list = body?.folders ?? [];
   const isEmpty = list.length === 0;
   const suggestions = getSuggestions({ domain: "folder", action: "list", isEmpty, ctx });
@@ -66,8 +64,10 @@ async function listFolders(args: string[], ctx: ClickupContext): Promise<string>
 }
 
 async function viewFolder(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "folder view");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Folder ID is required: clickup-axi folder view <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Folder ID is required: clickup-axi folder view <id>", "VALIDATION_ERROR");
   const folder = await get<ClickupFolder>(`/folder/${id}`);
   return renderOutput([
     renderDetail("folder", folder, viewSchema),
@@ -76,9 +76,14 @@ async function viewFolder(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function createFolder(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--space", "--name", "--execute", "--dry-run"], "folder create");
   const spaceId = takeFlag(args, "--space") ?? ctx.spaceId;
   const name = takeFlag(args, "--name");
-  if (!name) throw new AxiError("--name is required: clickup-axi folder create --name \"...\"", "VALIDATION_ERROR");
+  if (!name)
+    throw new AxiError(
+      '--name is required: clickup-axi folder create --name "..."',
+      "VALIDATION_ERROR",
+    );
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
@@ -102,8 +107,10 @@ async function createFolder(args: string[], ctx: ClickupContext): Promise<string
 }
 
 async function updateFolder(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--name", "--execute", "--dry-run"], "folder update");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Folder ID is required: clickup-axi folder update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Folder ID is required: clickup-axi folder update <id>", "VALIDATION_ERROR");
   const name = takeFlag(args, "--name");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
@@ -124,8 +131,10 @@ async function updateFolder(args: string[], ctx: ClickupContext): Promise<string
 }
 
 async function deleteFolder(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--execute", "--dry-run"], "folder delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Folder ID is required: clickup-axi folder delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("Folder ID is required: clickup-axi folder delete <id>", "VALIDATION_ERROR");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([

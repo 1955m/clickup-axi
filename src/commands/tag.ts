@@ -13,7 +13,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const TAG_HELP = `usage: clickup-axi tag <subcommand> [flags]
 subcommands[5]:
@@ -45,6 +45,7 @@ interface ClickupTag {
 const listSchema: FieldDef<ClickupTag>[] = [field("name"), field("tag_id")];
 
 async function listTags(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--space"], "tag list");
   const spaceId = getFlag(args, "--space") ?? ctx.spaceId;
   const body = await get<{ tags?: ClickupTag[] }>(`/space/${spaceId}/tag`);
   const tags = body?.tags ?? [];
@@ -56,6 +57,7 @@ async function listTags(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function createTag(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--space", "--tag", "--execute", "--dry-run"], "tag create");
   const spaceId = getFlag(args, "--space") ?? ctx.spaceId;
   const tag = getFlag(args, "--tag");
   if (!tag) throw new AxiError("--tag <name> is required", "VALIDATION_ERROR");
@@ -78,6 +80,11 @@ async function createTag(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function updateTag(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--space", "--tag", "--new-name", "--execute", "--dry-run"],
+    "tag update",
+  );
   const spaceId = getFlag(args, "--space") ?? ctx.spaceId;
   const oldName = getFlag(args, "--tag");
   if (!oldName) throw new AxiError("--tag <name> is required", "VALIDATION_ERROR");
@@ -105,13 +112,17 @@ async function updateTag(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function deleteTag(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--space", "--tag", "--execute", "--dry-run"], "tag delete");
   const spaceId = getFlag(args, "--space") ?? ctx.spaceId;
   const tag = getFlag(args, "--tag");
   if (!tag) throw new AxiError("--tag <name> is required", "VALIDATION_ERROR");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("delete", { tag, status: writeGateLabel(gate) }, [field("tag"), field("status")]),
+      renderDetail("delete", { tag, status: writeGateLabel(gate) }, [
+        field("tag"),
+        field("status"),
+      ]),
       renderHelp(["Add --execute to permanently delete this tag in ClickUp"]),
     ]);
   }
@@ -123,6 +134,7 @@ async function deleteTag(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function addToTask(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task", "--tag", "--execute", "--dry-run"], "tag add-to-task");
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   const tagName = getFlag(args, "--tag");
@@ -150,6 +162,7 @@ async function addToTask(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function removeFromTask(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task", "--tag", "--execute", "--dry-run"], "tag remove-from-task");
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   const tagName = getFlag(args, "--tag");

@@ -82,7 +82,9 @@ function sleep(ms: number): Promise<void> {
  * capped at 60s), then retry. Non-2xx (after exhausting retries, or for any
  * non-429 error) throws an `AxiError` via `mapClickupError`.
  */
-export async function request<T = unknown>(options: RequestOptions & { path: string }): Promise<ClickupResponse<T>> {
+export async function request<T = unknown>(
+  options: RequestOptions & { path: string },
+): Promise<ClickupResponse<T>> {
   const { method = "GET", path, params, body, headers, noAuth, base } = options;
   const url = buildUrl(path, params, base);
   const init: RequestInit = {
@@ -114,11 +116,9 @@ export async function request<T = unknown>(options: RequestOptions & { path: str
     } catch (err) {
       clearTimeout(timer);
       const message = err instanceof Error ? err.message : String(err);
-      throw new AxiError(
-        `ClickUp API request failed: ${message}`,
-        "UNKNOWN",
-        ["Check network connectivity and that api.clickup.com is reachable"],
-      );
+      throw new AxiError(`ClickUp API request failed: ${message}`, "UNKNOWN", [
+        "Check network connectivity and that api.clickup.com is reachable",
+      ]);
     }
     clearTimeout(timer);
 
@@ -208,7 +208,9 @@ export async function del<T = unknown>(
  * `/workspaces/${teamId}/docs`); the v3 base is applied. Used by the doc and
  * chat command groups (ClickUp has moved Docs and Chat to API v3).
  */
-export async function requestV3<T = unknown>(options: RequestOptions & { path: string }): Promise<ClickupResponse<T>> {
+export async function requestV3<T = unknown>(
+  options: RequestOptions & { path: string },
+): Promise<ClickupResponse<T>> {
   return request<T>({ ...options, base: CLICKUP_API_V3_BASE });
 }
 

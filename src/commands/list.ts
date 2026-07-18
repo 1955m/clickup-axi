@@ -14,7 +14,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const LIST_HELP = `usage: clickup-axi list <subcommand> [flags]
 subcommands[5]:
@@ -46,6 +46,7 @@ const listSchema: FieldDef<ClickupList>[] = [field("id"), field("name"), boolYes
 const viewSchema: FieldDef<ClickupList>[] = [field("id"), field("name"), field("content")];
 
 async function listLists(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--folder", "--space", "--archived"], "list list");
   const folderId = takeFlag(args, "--folder") ?? ctx.folderId;
   const spaceId = takeFlag(args, "--space") ?? ctx.spaceId;
   const archived = hasFlag(args, "--archived") ? "true" : "false";
@@ -66,8 +67,10 @@ async function listLists(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function viewList(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "list view");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("List ID is required: clickup-axi list view <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("List ID is required: clickup-axi list view <id>", "VALIDATION_ERROR");
   const list = await get<ClickupList>(`/list/${id}`);
   return renderOutput([
     renderDetail("list", list, viewSchema),
@@ -76,10 +79,19 @@ async function viewList(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function createList(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--folder", "--space", "--name", "--content", "--execute", "--dry-run"],
+    "list create",
+  );
   const folderId = takeFlag(args, "--folder") ?? ctx.folderId;
   const spaceId = takeFlag(args, "--space") ?? ctx.spaceId;
   const name = takeFlag(args, "--name");
-  if (!name) throw new AxiError("--name is required: clickup-axi list create --name \"...\"", "VALIDATION_ERROR");
+  if (!name)
+    throw new AxiError(
+      '--name is required: clickup-axi list create --name "..."',
+      "VALIDATION_ERROR",
+    );
   const content = takeFlag(args, "--content") ?? "";
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
@@ -107,8 +119,10 @@ async function createList(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function updateList(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--name", "--content", "--execute", "--dry-run"], "list update");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("List ID is required: clickup-axi list update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("List ID is required: clickup-axi list update <id>", "VALIDATION_ERROR");
   const name = takeFlag(args, "--name");
   const content = takeFlag(args, "--content");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
@@ -133,8 +147,10 @@ async function updateList(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function deleteList(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--execute", "--dry-run"], "list delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("List ID is required: clickup-axi list delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("List ID is required: clickup-axi list delete <id>", "VALIDATION_ERROR");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([

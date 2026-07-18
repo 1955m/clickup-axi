@@ -15,7 +15,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const VIEW_HELP = `usage: clickup-axi view <subcommand> [flags]
 subcommands[6]:
@@ -46,8 +46,18 @@ interface ClickupView {
   group_divider?: { collapsed?: boolean };
 }
 
-const listSchema: FieldDef<ClickupView>[] = [field("id"), field("name"), field("type"), boolYesNo("archived")];
-const viewSchema: FieldDef<ClickupView>[] = [field("id"), field("name"), field("type"), field("orderindex")];
+const listSchema: FieldDef<ClickupView>[] = [
+  field("id"),
+  field("name"),
+  field("type"),
+  boolYesNo("archived"),
+];
+const viewSchema: FieldDef<ClickupView>[] = [
+  field("id"),
+  field("name"),
+  field("type"),
+  field("orderindex"),
+];
 
 function scopeEndpoint(args: string[], ctx: ClickupContext): { path: string; scope: string } {
   const viewId = takeFlag(args, "--view");
@@ -61,6 +71,11 @@ function scopeEndpoint(args: string[], ctx: ClickupContext): { path: string; sco
 }
 
 async function listViews(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--view", "--list", "--folder", "--space", "--archived", "--view-type"],
+    "view list",
+  );
   const { path } = scopeEndpoint(args, ctx);
   const body = await get<{ views?: ClickupView[] }>(path);
   const list = body?.views ?? [];
@@ -74,6 +89,7 @@ async function listViews(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function getView(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "view get");
   const id = getPositional(args, 0);
   if (!id) throw new AxiError("View ID is required: clickup-axi view get <id>", "VALIDATION_ERROR");
   const view = await get<ClickupView>(`/view/${id}`);
@@ -96,8 +112,10 @@ const taskSummarySchema: FieldDef<ClickupTaskSummary>[] = [
 ];
 
 async function viewTasks(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--page"], "view tasks");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("View ID is required: clickup-axi view tasks <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("View ID is required: clickup-axi view tasks <id>", "VALIDATION_ERROR");
   const page = takeFlag(args, "--page") ?? "0";
   const body = await get<{ tasks?: ClickupTaskSummary[] }>(`/view/${id}/task`, { page });
   const tasks = body?.tasks ?? [];
@@ -109,10 +127,23 @@ async function viewTasks(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function createView(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--name", "--type", "--list", "--folder", "--space", "--team", "--execute", "--dry-run"],
+    "view create",
+  );
   const name = takeFlag(args, "--name");
-  if (!name) throw new AxiError("--name is required: clickup-axi view create --name \"...\"", "VALIDATION_ERROR");
+  if (!name)
+    throw new AxiError(
+      '--name is required: clickup-axi view create --name "..."',
+      "VALIDATION_ERROR",
+    );
   const type = takeFlag(args, "--type");
-  if (!type) throw new AxiError("--type <list|board|calendar|table|timeline|workload|activity|map|chat|gantt> is required", "VALIDATION_ERROR");
+  if (!type)
+    throw new AxiError(
+      "--type <list|board|calendar|table|timeline|workload|activity|map|chat|gantt> is required",
+      "VALIDATION_ERROR",
+    );
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   // Scope: explicit --list/--folder/--space take priority; --team (default resolved) = workspace-level view.
   const listId = takeFlag(args, "--list") ?? ctx.listId;
@@ -121,10 +152,19 @@ async function createView(args: string[], ctx: ClickupContext): Promise<string> 
   const teamId = takeFlag(args, "--team") ?? ctx.teamId;
   let path: string;
   let scope: string;
-  if (listId) { path = `/list/${listId}/view`; scope = "list"; }
-  else if (folderId) { path = `/folder/${folderId}/view`; scope = "folder"; }
-  else if (spaceId && !takeFlag(args, "--team")) { path = `/space/${spaceId}/view`; scope = "space"; }
-  else { path = `/team/${teamId}/view`; scope = "team"; }
+  if (listId) {
+    path = `/list/${listId}/view`;
+    scope = "list";
+  } else if (folderId) {
+    path = `/folder/${folderId}/view`;
+    scope = "folder";
+  } else if (spaceId && !takeFlag(args, "--team")) {
+    path = `/space/${spaceId}/view`;
+    scope = "space";
+  } else {
+    path = `/team/${teamId}/view`;
+    scope = "team";
+  }
   const payload: Record<string, unknown> = { name, type };
   if (!gate.execute) {
     return renderOutput([
@@ -151,8 +191,10 @@ async function createView(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function updateView(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--name", "--execute", "--dry-run"], "view update");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("View ID is required: clickup-axi view update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("View ID is required: clickup-axi view update <id>", "VALIDATION_ERROR");
   const name = takeFlag(args, "--name");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   const payload: Record<string, unknown> = {};
@@ -175,8 +217,10 @@ async function updateView(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function deleteView(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--execute", "--dry-run"], "view delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("View ID is required: clickup-axi view delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError("View ID is required: clickup-axi view delete <id>", "VALIDATION_ERROR");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([

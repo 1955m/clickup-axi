@@ -15,7 +15,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const CHAT_HELP = `usage: clickup-axi chat <subcommand> [flags]
 subcommands[5]:
@@ -79,7 +79,10 @@ const messageSchema: FieldDef<ChatMessage>[] = [
   custom("created", (m) => formatEpoch(m.date)),
   custom("body", (m) => {
     const c = m.content;
-    return truncateBody(typeof c === "string" ? c : Array.isArray(c?.content) ? c.content.join("\n") : "", 800);
+    return truncateBody(
+      typeof c === "string" ? c : Array.isArray(c?.content) ? c.content.join("\n") : "",
+      800,
+    );
   }),
 ];
 
@@ -88,6 +91,11 @@ function chatPath(teamId: string, suffix = ""): string {
 }
 
 async function channelList(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--team", "--limit", "--cursor", "--channel-types", "--include-closed"],
+    "chat channel-list",
+  );
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const limit = getFlag(args, "--limit") ?? "50";
   const cursor = getFlag(args, "--cursor");
@@ -108,8 +116,13 @@ async function channelList(args: string[], ctx: ClickupContext): Promise<string>
 }
 
 async function channelView(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--team"], "chat channel-view");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Channel ID is required: clickup-axi chat channel-view <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Channel ID is required: clickup-axi chat channel-view <id>",
+      "VALIDATION_ERROR",
+    );
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const body = await getV3<{ data?: ChatChannel }>(`${chatPath(teamId, "/channels")}/${id}`);
   const channel = body?.data ?? {};
@@ -120,8 +133,26 @@ async function channelView(args: string[], ctx: ClickupContext): Promise<string>
 }
 
 async function channelCreate(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--name",
+      "--team",
+      "--description",
+      "--topic",
+      "--user",
+      "--visibility",
+      "--execute",
+      "--dry-run",
+    ],
+    "chat channel-create",
+  );
   const name = getFlag(args, "--name");
-  if (!name) throw new AxiError("--name is required: clickup-axi chat channel-create --name \"...\"", "VALIDATION_ERROR");
+  if (!name)
+    throw new AxiError(
+      '--name is required: clickup-axi chat channel-create --name "..."',
+      "VALIDATION_ERROR",
+    );
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const description = getFlag(args, "--description");
   const topic = getFlag(args, "--topic");
@@ -135,12 +166,11 @@ async function channelCreate(args: string[], ctx: ClickupContext): Promise<strin
   if (visibility) payload["visibility"] = visibility.toUpperCase();
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("channel-create", { name, team: teamId, status: writeGateLabel(gate), payload }, [
-        field("name"),
-        field("team"),
-        field("status"),
-        field("payload"),
-      ]),
+      renderDetail(
+        "channel-create",
+        { name, team: teamId, status: writeGateLabel(gate), payload },
+        [field("name"), field("team"), field("status"), field("payload")],
+      ),
       renderHelp(["Add --execute to create this Chat channel in ClickUp (v3 experimental)"]),
     ]);
   }
@@ -156,8 +186,17 @@ async function channelCreate(args: string[], ctx: ClickupContext): Promise<strin
 }
 
 async function messageList(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--team", "--limit", "--cursor", "--content-format"],
+    "chat message-list",
+  );
   const channelId = getPositional(args, 0);
-  if (!channelId) throw new AxiError("Channel ID is required: clickup-axi chat message-list <channel-id>", "VALIDATION_ERROR");
+  if (!channelId)
+    throw new AxiError(
+      "Channel ID is required: clickup-axi chat message-list <channel-id>",
+      "VALIDATION_ERROR",
+    );
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const limit = getFlag(args, "--limit") ?? "50";
   const cursor = getFlag(args, "--cursor");
@@ -180,6 +219,20 @@ async function messageList(args: string[], ctx: ClickupContext): Promise<string>
 }
 
 async function messageSend(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--channel",
+      "--team",
+      "--body",
+      "--body-file",
+      "--content-format",
+      "--type",
+      "--execute",
+      "--dry-run",
+    ],
+    "chat message-send",
+  );
   const channelId = getFlag(args, "--channel");
   if (!channelId) throw new AxiError("--channel <id> is required", "VALIDATION_ERROR");
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
@@ -196,7 +249,9 @@ async function messageSend(args: string[], ctx: ClickupContext): Promise<string>
         field("status"),
         field("payload"),
       ]),
-      renderHelp(["Add --execute to send this Chat message in ClickUp (v3 experimental; COMPANY account)"]),
+      renderHelp([
+        "Add --execute to send this Chat message in ClickUp (v3 experimental; COMPANY account)",
+      ]),
     ]);
   }
   const created = await postV3<{ data?: ChatMessage }>(
@@ -204,7 +259,10 @@ async function messageSend(args: string[], ctx: ClickupContext): Promise<string>
     payload,
   );
   return renderOutput([
-    renderDetail("sent", { id: created.data?.id ?? null, status: "ok" }, [field("id"), field("status")]),
+    renderDetail("sent", { id: created.data?.id ?? null, status: "ok" }, [
+      field("id"),
+      field("status"),
+    ]),
     renderHelp(getSuggestions({ domain: "chat", action: "create", id: channelId, ctx })),
   ]);
 }

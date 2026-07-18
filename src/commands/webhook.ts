@@ -15,7 +15,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const WEBHOOK_HELP = `usage: clickup-axi webhook <subcommand> [flags]
 subcommands[4]:
@@ -57,6 +57,7 @@ const listSchema: FieldDef<ClickupWebhook>[] = [
 ];
 
 async function listWebhooks(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--team"], "webhook list");
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const body = await get<{ webhooks?: ClickupWebhook[] }>(`/team/${teamId}/webhook`);
   const webhooks = body?.webhooks ?? [];
@@ -68,17 +69,39 @@ async function listWebhooks(args: string[], ctx: ClickupContext): Promise<string
 }
 
 async function createWebhook(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    [
+      "--endpoint",
+      "--event",
+      "--events",
+      "--space",
+      "--folder",
+      "--list",
+      "--task",
+      "--execute",
+      "--dry-run",
+    ],
+    "webhook create",
+  );
   const endpoint = getFlag(args, "--endpoint");
   if (!endpoint) throw new AxiError("--endpoint <url> is required", "VALIDATION_ERROR");
   const eventFlags = getAllFlags(args, "--event");
   const eventsCsv = getFlag(args, "--events");
-  const events = eventFlags.length > 0
-    ? eventFlags
-    : eventsCsv
-      ? eventsCsv.split(",").map((e) => e.trim()).filter(Boolean)
-      : [];
+  const events =
+    eventFlags.length > 0
+      ? eventFlags
+      : eventsCsv
+        ? eventsCsv
+            .split(",")
+            .map((e) => e.trim())
+            .filter(Boolean)
+        : [];
   if (events.length === 0) {
-    throw new AxiError("--event <name> (repeatable) or --events a,b,c is required", "VALIDATION_ERROR");
+    throw new AxiError(
+      "--event <name> (repeatable) or --events a,b,c is required",
+      "VALIDATION_ERROR",
+    );
   }
   const spaceId = getFlag(args, "--space") ?? ctx.spaceId;
   const folderId = getFlag(args, "--folder") ?? ctx.folderId;
@@ -107,23 +130,38 @@ async function createWebhook(args: string[], ctx: ClickupContext): Promise<strin
       field("endpoint"),
       field("status"),
     ]),
-    renderHelp(getSuggestions({ domain: "webhook", action: "create", id: created.webhook?.id, ctx })),
+    renderHelp(
+      getSuggestions({ domain: "webhook", action: "create", id: created.webhook?.id, ctx }),
+    ),
   ]);
 }
 
 async function updateWebhook(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--endpoint", "--event", "--events", "--status", "--execute", "--dry-run"],
+    "webhook update",
+  );
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Webhook ID is required: clickup-axi webhook update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Webhook ID is required: clickup-axi webhook update <id>",
+      "VALIDATION_ERROR",
+    );
   const endpoint = getFlag(args, "--endpoint");
   const eventFlags = getAllFlags(args, "--event");
   const eventsCsv = getFlag(args, "--events");
   const status = getFlag(args, "--status");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
-  const events = eventFlags.length > 0
-    ? eventFlags
-    : eventsCsv
-      ? eventsCsv.split(",").map((e) => e.trim()).filter(Boolean)
-      : [];
+  const events =
+    eventFlags.length > 0
+      ? eventFlags
+      : eventsCsv
+        ? eventsCsv
+            .split(",")
+            .map((e) => e.trim())
+            .filter(Boolean)
+        : [];
   const payload: Record<string, unknown> = {};
   if (endpoint) payload["endpoint"] = endpoint;
   if (events.length > 0) payload["events"] = events;
@@ -146,8 +184,13 @@ async function updateWebhook(args: string[], ctx: ClickupContext): Promise<strin
 }
 
 async function deleteWebhook(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--execute", "--dry-run"], "webhook delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Webhook ID is required: clickup-axi webhook delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Webhook ID is required: clickup-axi webhook delete <id>",
+      "VALIDATION_ERROR",
+    );
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([

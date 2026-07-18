@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { parseContextArgs, buildContext } from "./context.js";
+import { parseContextArgs, buildContext, rejectUnknownFlags } from "./context.js";
 
 describe("parseContextArgs", () => {
   it("strips --team/--space/--folder/--list in space form", () => {
@@ -12,8 +12,20 @@ describe("parseContextArgs", () => {
   });
 
   it("strips equals form for all four flags", () => {
-    const r = parseContextArgs(["task", "--team=111", "--space=222", "--folder=333", "--list=444", "list"]);
-    expect(r).toMatchObject({ teamFlag: "111", spaceFlag: "222", folderFlag: "333", listFlag: "444" });
+    const r = parseContextArgs([
+      "task",
+      "--team=111",
+      "--space=222",
+      "--folder=333",
+      "--list=444",
+      "list",
+    ]);
+    expect(r).toMatchObject({
+      teamFlag: "111",
+      spaceFlag: "222",
+      folderFlag: "333",
+      listFlag: "444",
+    });
     expect(r.strippedArgs).toEqual(["task", "list"]);
   });
 
@@ -46,7 +58,9 @@ describe("buildContext", () => {
   });
 
   it("honors explicit flags over defaults", () => {
-    const ctx = buildContext(parseContextArgs(["--team", "999", "--space", "888", "--folder", "777", "--list", "666"]));
+    const ctx = buildContext(
+      parseContextArgs(["--team", "999", "--space", "888", "--folder", "777", "--list", "666"]),
+    );
     expect(ctx).toEqual({ teamId: "999", spaceId: "888", folderId: "777", listId: "666" });
   });
 
@@ -62,5 +76,51 @@ describe("buildContext", () => {
     process.env["FM_CLICKUP_TEAM"] = "env-team";
     const ctx = buildContext(parseContextArgs(["--team", "flag-team"]));
     expect(ctx.teamId).toBe("flag-team");
+  });
+});
+
+describe("rejectUnknownFlags (AXI P6: fail loud on unknown flags)", () => {
+  it("passes silently when every flag is known", () => {
+    expect(() =>
+      rejectUnknownFlags(
+        ["--name", "x", "--execute"],
+        ["--name", "--execute", "--dry-run"],
+        "task create",
+      ),
+    ).not.toThrow();
+  });
+
+  it("allows the context + help globals even when not declared known", () => {
+    expect(() =>
+      rejectUnknownFlags(["--team", "123", "--space", "9", "--help"], ["--name"], "task list"),
+    ).not.toThrow();
+  });
+
+  it("rejects an unknown flag by name with VALIDATION_ERROR + the valid-flag list", () => {
+    let err: unknown;
+    try {
+      rejectUnknownFlags(["--bogus"], ["--name", "--list"], "task create");
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toMatchObject({ code: "VALIDATION_ERROR" });
+    expect((err as Error).message).toContain("unknown flag --bogus");
+    expect((err as Error).message).toContain("`task create`");
+    const suggestions = (err as { suggestions?: string[] }).suggestions ?? [];
+    expect(suggestions.some((s) => s.includes("--name") && s.includes("--list"))).toBe(true);
+  });
+
+  it("extracts the flag name from --flag=value form before rejecting", () => {
+    let err: unknown;
+    try {
+      rejectUnknownFlags(["--bogus=1"], [], "task list");
+    } catch (e) {
+      err = e;
+    }
+    expect((err as Error).message).toContain("unknown flag --bogus");
+  });
+
+  it("leaves positional (non-dash) args alone", () => {
+    expect(() => rejectUnknownFlags(["abc123"], [], "task view")).not.toThrow();
   });
 });

@@ -31,7 +31,10 @@
     "dev": "tsx bin/clickup-axi.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "docs:check": "pnpm run build:skill && git diff --exit-code -- skills/"
   },
   "license": "MIT",
   "engines": {
@@ -47,6 +50,7 @@
     "@types/node": "^22.0.0",
     "eslint": "^10.7.0",
     "globals": "^17.7.0",
+    "prettier": "^3.3.0",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.64.0",

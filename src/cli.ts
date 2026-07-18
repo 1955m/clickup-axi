@@ -91,8 +91,16 @@ function withContext(
     const merged: ClickupContext = {
       teamId: parsed.teamFlag ?? base.teamId,
       spaceId: parsed.spaceFlag ?? base.spaceId,
-      ...(parsed.folderFlag ? { folderId: parsed.folderFlag } : base.folderId ? { folderId: base.folderId } : {}),
-      ...(parsed.listFlag ? { listId: parsed.listFlag } : base.listId ? { listId: base.listId } : {}),
+      ...(parsed.folderFlag
+        ? { folderId: parsed.folderFlag }
+        : base.folderId
+          ? { folderId: base.folderId }
+          : {}),
+      ...(parsed.listFlag
+        ? { listId: parsed.listFlag }
+        : base.listId
+          ? { listId: base.listId }
+          : {}),
     };
     // --path resolves Space/Folder/List by NAME (case-insensitive) and sets the
     // IDs; explicit --space/--folder/--list flags still win over the path.

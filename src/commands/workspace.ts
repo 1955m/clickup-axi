@@ -11,7 +11,7 @@ import {
 } from "../toon.js";
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const WORKSPACE_HELP = `usage: clickup-axi workspace <subcommand>
 subcommands[7]:
@@ -39,12 +39,18 @@ const viewSchema: FieldDef<ClickupTeam>[] = [field("id"), field("name")];
 const sharedListSchema: FieldDef<SharedNode>[] = [field("id"), field("name")];
 
 async function listWorkspaces(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "workspace list");
   // The ClickUp /team endpoint returns the teams the token belongs to. It
   // accepts no pagination params.
   void args;
   const body = await get<{ teams?: ClickupTeam[] }>("/team");
   const list = body?.teams ?? [];
-  const suggestions = getSuggestions({ domain: "workspace", action: "list", isEmpty: list.length === 0, ctx });
+  const suggestions = getSuggestions({
+    domain: "workspace",
+    action: "list",
+    isEmpty: list.length === 0,
+    ctx,
+  });
   return renderOutput([
     formatCountLine({ count: list.length }),
     renderList("workspaces", list, listSchema),
@@ -53,8 +59,13 @@ async function listWorkspaces(args: string[], ctx: ClickupContext): Promise<stri
 }
 
 async function viewWorkspace(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "workspace view");
   const id = args[0];
-  if (!id) return renderError("Workspace/team ID is required: clickup-axi workspace view <id>", "VALIDATION_ERROR");
+  if (!id)
+    return renderError(
+      "Workspace/team ID is required: clickup-axi workspace view <id>",
+      "VALIDATION_ERROR",
+    );
   const team = await get<ClickupTeam>(`/team/${id}`);
   return renderOutput([
     renderDetail("workspace", team, viewSchema),
@@ -63,10 +74,20 @@ async function viewWorkspace(args: string[], ctx: ClickupContext): Promise<strin
 }
 
 async function workspaceSeats(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "workspace seats");
   void args;
-  const body = await get<{ members?: { filled_members_seats?: number; total_member_seats?: number; empty_member_seats?: number }; guests?: { filled_guests_seats?: number; total_guests_seats?: number; empty_guests_seats?: number } }>(
-    `/team/${ctx.teamId}/seats`,
-  );
+  const body = await get<{
+    members?: {
+      filled_members_seats?: number;
+      total_member_seats?: number;
+      empty_member_seats?: number;
+    };
+    guests?: {
+      filled_guests_seats?: number;
+      total_guests_seats?: number;
+      empty_guests_seats?: number;
+    };
+  }>(`/team/${ctx.teamId}/seats`);
   const seats = {
     members: `${body?.members?.filled_members_seats ?? 0}/${body?.members?.total_member_seats ?? 0}`,
     guests: `${body?.guests?.filled_guests_seats ?? 0}/${body?.guests?.total_guests_seats ?? 0}`,
@@ -78,29 +99,34 @@ async function workspaceSeats(args: string[], ctx: ClickupContext): Promise<stri
 }
 
 async function workspacePlan(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "workspace plan");
   void args;
   const body = await get<{ plan_name?: string; plan_id?: number }>(`/team/${ctx.teamId}/plan`);
   return renderOutput([
-    renderDetail("plan", { name: body?.plan_name ?? "unknown", id: body?.plan_id ?? null }, [field("name"), field("id")]),
+    renderDetail("plan", { name: body?.plan_name ?? "unknown", id: body?.plan_id ?? null }, [
+      field("name"),
+      field("id"),
+    ]),
     renderHelp(getSuggestions({ domain: "workspace", action: "view", ctx })),
   ]);
 }
 
 async function workspaceShared(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "workspace shared");
   void args;
-  const body = await get<{ shared?: { tasks?: string[]; lists?: SharedNode[]; folders?: SharedNode[] } }>(
-    `/team/${ctx.teamId}/shared`,
-  );
+  const body = await get<{
+    shared?: { tasks?: string[]; lists?: SharedNode[]; folders?: SharedNode[] };
+  }>(`/team/${ctx.teamId}/shared`);
   const shared = body?.shared ?? { tasks: [], lists: [], folders: [] };
   const taskIds = shared.tasks ?? [];
   const lists = shared.lists ?? [];
   const folders = shared.folders ?? [];
   return renderOutput([
-    renderDetail("shared", { tasks: taskIds.length, lists: lists.length, folders: folders.length }, [
-      field("tasks"),
-      field("lists"),
-      field("folders"),
-    ]),
+    renderDetail(
+      "shared",
+      { tasks: taskIds.length, lists: lists.length, folders: folders.length },
+      [field("tasks"), field("lists"), field("folders")],
+    ),
     lists.length ? renderList("shared_lists", lists, sharedListSchema) : undefined,
     folders.length ? renderList("shared_folders", folders, sharedListSchema) : undefined,
     renderHelp(getSuggestions({ domain: "workspace", action: "view", ctx })),
@@ -108,15 +134,26 @@ async function workspaceShared(args: string[], ctx: ClickupContext): Promise<str
 }
 
 async function customRoles(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "workspace custom-roles");
   void args;
-  const body = await get<{ custom_roles?: { id?: number; name?: string; inherited_role?: number }[] }>(
-    `/team/${ctx.teamId}/customroles`,
-  );
+  const body = await get<{
+    custom_roles?: { id?: number; name?: string; inherited_role?: number }[];
+  }>(`/team/${ctx.teamId}/customroles`);
   const roles = body?.custom_roles ?? [];
   const schema: FieldDef<{ id?: number; name?: string; inherited_role?: number }>[] = [
     field("id"),
     field("name"),
-    custom("inherited_role", (r) => (r.inherited_role === 1 ? "owner" : r.inherited_role === 2 ? "admin" : r.inherited_role === 3 ? "member" : r.inherited_role === 4 ? "guest" : String(r.inherited_role ?? "unknown"))),
+    custom("inherited_role", (r) =>
+      r.inherited_role === 1
+        ? "owner"
+        : r.inherited_role === 2
+          ? "admin"
+          : r.inherited_role === 3
+            ? "member"
+            : r.inherited_role === 4
+              ? "guest"
+              : String(r.inherited_role ?? "unknown"),
+    ),
   ];
   return renderOutput([
     formatCountLine({ count: roles.length }),
@@ -126,8 +163,11 @@ async function customRoles(args: string[], ctx: ClickupContext): Promise<string>
 }
 
 async function customItems(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, [], "workspace custom-items");
   void args;
-  const body = await get<{ custom_items?: { id?: number; name?: string }[] }>(`/team/${ctx.teamId}/custom_item`);
+  const body = await get<{ custom_items?: { id?: number; name?: string }[] }>(
+    `/team/${ctx.teamId}/custom_item`,
+  );
   const items = body?.custom_items ?? [];
   const schema: FieldDef<{ id?: number; name?: string }>[] = [field("id"), field("name")];
   return renderOutput([

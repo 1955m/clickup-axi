@@ -33,13 +33,21 @@ function findByName<T extends Named>(items: T[], name: string): T | undefined {
 }
 
 function availableNames(items: Named[]): string {
-  return items.map((x) => x.name ?? "(unnamed)").sort().join(", ") || "none";
+  return (
+    items
+      .map((x) => x.name ?? "(unnamed)")
+      .sort()
+      .join(", ") || "none"
+  );
 }
 
 export async function resolvePath(path: string, teamId: string): Promise<ResolvedPath> {
-  const segments = path.split("/").map((s) => s.trim()).filter(Boolean);
+  const segments = path
+    .split("/")
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (segments.length === 0) {
-    throw new AxiError("--path is empty", "VALIDATION_ERROR", ["Use --path \"Space/Folder/List\""]);
+    throw new AxiError("--path is empty", "VALIDATION_ERROR", ['Use --path "Space/Folder/List"']);
   }
   const result: ResolvedPath = { matched: [] };
 
@@ -88,7 +96,9 @@ export async function resolvePath(path: string, teamId: string): Promise<Resolve
 
   // No folder matched segment 1 — try a folderless list in the space.
   if (segments.length === 2) {
-    const listBody = await get<{ lists?: Named[] }>(`/space/${space.id}/list`, { archived: "false" });
+    const listBody = await get<{ lists?: Named[] }>(`/space/${space.id}/list`, {
+      archived: "false",
+    });
     const lists = listBody?.lists ?? [];
     const list = findByName(lists, segments[1]);
     if (list) {
@@ -99,7 +109,9 @@ export async function resolvePath(path: string, teamId: string): Promise<Resolve
     throw new AxiError(
       `--path: neither a folder nor a folderless list named "${segments[1]}" in space "${space.name}". Folders: ${availableNames(folders)}; folderless lists: ${availableNames(lists)}`,
       "VALIDATION_ERROR",
-      [`Run \`clickup-axi folder list --space ${space.id}\` or \`clickup-axi list list --space ${space.id}\` to browse`],
+      [
+        `Run \`clickup-axi folder list --space ${space.id}\` or \`clickup-axi list list --space ${space.id}\` to browse`,
+      ],
     );
   }
 

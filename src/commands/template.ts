@@ -14,7 +14,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const TEMPLATE_HELP = `usage: clickup-axi template <subcommand> [flags]
 subcommands[6]:
@@ -56,6 +56,7 @@ const listSchema: FieldDef<TemplateRow>[] = [
 ];
 
 async function listTaskTemplates(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--team", "--page"], "template task-list");
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const page = getFlag(args, "--page") ?? "0";
   const body = await get<{ templates?: TemplateRow[] }>(`/team/${teamId}/taskTemplate`, { page });
@@ -68,6 +69,7 @@ async function listTaskTemplates(args: string[], ctx: ClickupContext): Promise<s
 }
 
 async function listListTemplates(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--team"], "template list-list");
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const body = await get<{ templates?: TemplateRow[] }>(`/team/${teamId}/list_template`);
   const templates = body?.templates ?? [];
@@ -79,6 +81,7 @@ async function listListTemplates(args: string[], ctx: ClickupContext): Promise<s
 }
 
 async function listFolderTemplates(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--team"], "template folder-list");
   const teamId = getFlag(args, "--team") ?? ctx.teamId;
   const body = await get<{ templates?: TemplateRow[] }>(`/team/${teamId}/folder_template`);
   const templates = body?.templates ?? [];
@@ -91,13 +94,19 @@ async function listFolderTemplates(args: string[], ctx: ClickupContext): Promise
 
 function requireTemplateAndName(args: string[]): { templateId: string; name: string } {
   const templateId = getFlag(args, "--template");
-  if (!templateId) throw new AxiError("--template <id> is required (IDs carry a 't-' prefix)", "VALIDATION_ERROR");
+  if (!templateId)
+    throw new AxiError("--template <id> is required (IDs carry a 't-' prefix)", "VALIDATION_ERROR");
   const name = getFlag(args, "--name");
   if (!name) throw new AxiError("--name is required", "VALIDATION_ERROR");
   return { templateId, name };
 }
 
 async function createTaskFromTemplate(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--list", "--template", "--name", "--execute", "--dry-run"],
+    "template task-create",
+  );
   const listId = getFlag(args, "--list") ?? ctx.listId;
   if (!listId) throw new AxiError("--list <id> is required (the home list)", "VALIDATION_ERROR");
   const { templateId, name } = requireTemplateAndName(args);
@@ -105,16 +114,18 @@ async function createTaskFromTemplate(args: string[], ctx: ClickupContext): Prom
   const payload: Record<string, unknown> = { name };
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("task-create", { list: listId, template: templateId, name, status: writeGateLabel(gate) }, [
-        field("list"),
-        field("template"),
-        field("name"),
-        field("status"),
-      ]),
+      renderDetail(
+        "task-create",
+        { list: listId, template: templateId, name, status: writeGateLabel(gate) },
+        [field("list"), field("template"), field("name"), field("status")],
+      ),
       renderHelp(["Add --execute to create this task from the template in ClickUp"]),
     ]);
   }
-  const created = await post<{ id?: string }>(`/list/${listId}/taskTemplate/${templateId}`, payload);
+  const created = await post<{ id?: string }>(
+    `/list/${listId}/taskTemplate/${templateId}`,
+    payload,
+  );
   return renderOutput([
     renderDetail("created", { id: created.id ?? null, name, status: "ok" }, [
       field("id"),
@@ -126,11 +137,19 @@ async function createTaskFromTemplate(args: string[], ctx: ClickupContext): Prom
 }
 
 async function createListFromTemplate(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--folder", "--space", "--template", "--name", "--execute", "--dry-run"],
+    "template list-create",
+  );
   const folderId = getFlag(args, "--folder") ?? ctx.folderId;
   const spaceId = getFlag(args, "--space") ?? ctx.spaceId;
   const { templateId, name } = requireTemplateAndName(args);
   if (!folderId && !spaceId) {
-    throw new AxiError("--folder <id> or --space <id> is required (the location)", "VALIDATION_ERROR");
+    throw new AxiError(
+      "--folder <id> or --space <id> is required (the location)",
+      "VALIDATION_ERROR",
+    );
   }
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   const path = folderId
@@ -139,12 +158,11 @@ async function createListFromTemplate(args: string[], ctx: ClickupContext): Prom
   const payload: Record<string, unknown> = { name };
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("list-create", { location: folderId ?? spaceId, template: templateId, name, status: writeGateLabel(gate) }, [
-        field("location"),
-        field("template"),
-        field("name"),
-        field("status"),
-      ]),
+      renderDetail(
+        "list-create",
+        { location: folderId ?? spaceId, template: templateId, name, status: writeGateLabel(gate) },
+        [field("location"), field("template"), field("name"), field("status")],
+      ),
       renderHelp(["Add --execute to create this list from the template in ClickUp"]),
     ]);
   }
@@ -160,6 +178,11 @@ async function createListFromTemplate(args: string[], ctx: ClickupContext): Prom
 }
 
 async function createFolderFromTemplate(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--space", "--template", "--name", "--execute", "--dry-run"],
+    "template folder-create",
+  );
   const spaceId = getFlag(args, "--space") ?? ctx.spaceId;
   const { templateId, name } = requireTemplateAndName(args);
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
@@ -167,12 +190,11 @@ async function createFolderFromTemplate(args: string[], ctx: ClickupContext): Pr
   const payload: Record<string, unknown> = { name };
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("folder-create", { space: spaceId, template: templateId, name, status: writeGateLabel(gate) }, [
-        field("space"),
-        field("template"),
-        field("name"),
-        field("status"),
-      ]),
+      renderDetail(
+        "folder-create",
+        { space: spaceId, template: templateId, name, status: writeGateLabel(gate) },
+        [field("space"), field("template"), field("name"), field("status")],
+      ),
       renderHelp(["Add --execute to create this folder from the template in ClickUp"]),
     ]);
   }

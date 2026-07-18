@@ -44,20 +44,32 @@ const table: SuggestionEntry[] = [
   },
   // Workspace / space / folder / list — list
   {
-    match: (c) => ["workspace", "space", "folder", "list"].includes(c.domain) && c.action === "list" && !c.isEmpty,
+    match: (c) =>
+      ["workspace", "space", "folder", "list"].includes(c.domain) &&
+      c.action === "list" &&
+      !c.isEmpty,
     lines: (c) => [`Run \`clickup-axi ${c.domain} view <id>${ctx(c)}\` to view details`],
   },
   {
-    match: (c) => ["workspace", "space", "folder", "list"].includes(c.domain) && c.action === "list" && c.isEmpty === true,
-    lines: (c) => [`Run \`clickup-axi ${c.domain} create --name "..."${ctx(c)}\` to create one (writes need --execute)`],
+    match: (c) =>
+      ["workspace", "space", "folder", "list"].includes(c.domain) &&
+      c.action === "list" &&
+      c.isEmpty === true,
+    lines: (c) => [
+      `Run \`clickup-axi ${c.domain} create --name "..."${ctx(c)}\` to create one (writes need --execute)`,
+    ],
   },
   // Hierarchy view
   {
-    match: (c) => ["workspace", "space", "folder", "list"].includes(c.domain) && c.action === "view",
+    match: (c) =>
+      ["workspace", "space", "folder", "list"].includes(c.domain) && c.action === "view",
     lines: (c) => {
-      if (c.domain === "space") return [`Run \`clickup-axi folder list --space ${c.id}${ctx(c)}\` to see folders`];
-      if (c.domain === "folder") return [`Run \`clickup-axi list list --folder ${c.id}${ctx(c)}\` to see lists`];
-      if (c.domain === "list") return [`Run \`clickup-axi task list --list ${c.id}${ctx(c)}\` to see tasks`];
+      if (c.domain === "space")
+        return [`Run \`clickup-axi folder list --space ${c.id}${ctx(c)}\` to see folders`];
+      if (c.domain === "folder")
+        return [`Run \`clickup-axi list list --folder ${c.id}${ctx(c)}\` to see lists`];
+      if (c.domain === "list")
+        return [`Run \`clickup-axi task list --list ${c.id}${ctx(c)}\` to see tasks`];
       return [];
     },
   },
@@ -102,7 +114,8 @@ const table: SuggestionEntry[] = [
   },
   // Task comments / custom-fields / dependencies
   {
-    match: (c) => c.domain === "task" && ["comments", "custom-fields", "dependencies"].includes(c.action),
+    match: (c) =>
+      c.domain === "task" && ["comments", "custom-fields", "dependencies"].includes(c.action),
     lines: (c) => [`Run \`clickup-axi task view ${c.id}${ctx(c)}\` to see the task`],
   },
   // Comment create
@@ -113,15 +126,21 @@ const table: SuggestionEntry[] = [
   // Time / tag / attachment
   {
     match: (c) => c.domain === "time" && c.action === "list",
-    lines: (c) => [`Run \`clickup-axi time create --task <id>${ctx(c)}\` to log time (writes need --execute)`],
+    lines: (c) => [
+      `Run \`clickup-axi time create --task <id>${ctx(c)}\` to log time (writes need --execute)`,
+    ],
   },
   {
     match: (c) => c.domain === "tag" && c.action === "list",
-    lines: (c) => [`Run \`clickup-axi tag create --tag "..."${ctx(c)}\` to create a space tag (writes need --execute)`],
+    lines: (c) => [
+      `Run \`clickup-axi tag create --tag "..."${ctx(c)}\` to create a space tag (writes need --execute)`,
+    ],
   },
   {
     match: (c) => c.domain === "attachment" && c.action === "list",
-    lines: (c) => [`Run \`clickup-axi attachment upload --task <id> --file <path>${ctx(c)}\` to upload (writes need --execute)`],
+    lines: (c) => [
+      `Run \`clickup-axi attachment upload --task <id> --file <path>${ctx(c)}\` to upload (writes need --execute)`,
+    ],
   },
   // View / doc
   {

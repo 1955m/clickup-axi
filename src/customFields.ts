@@ -79,7 +79,9 @@ export function resolveFieldValue(field: ClickupField): unknown {
   }
   if (ftype === "users") {
     if (Array.isArray(value)) {
-      return value.map((u) => (u && typeof u === "object" ? u.username ?? u.email ?? u.id ?? u : u));
+      return value.map((u) =>
+        u && typeof u === "object" ? (u.username ?? u.email ?? u.id ?? u) : u,
+      );
     }
     return value;
   }
@@ -153,7 +155,10 @@ export function requireFieldId(index: FieldIndex, name: string): string {
   return field.id;
 }
 
-export function fieldNotFoundError(name: string, available: string[]): Error & { code: string; suggestions: string[] } {
+export function fieldNotFoundError(
+  name: string,
+  available: string[],
+): Error & { code: string; suggestions: string[] } {
   const e = new Error(
     `Custom field "${name}" not found in this list/space. Available: ${available.sort().join(", ") || "none"}`,
   ) as Error & { code: string; suggestions: string[] };
@@ -169,23 +174,20 @@ export function fieldNotFoundError(name: string, available: string[]): Error & {
  * Coerce a typed value into the ClickUp custom-field wire format. For
  * drop_down/labels we resolve option NAME -> id at write time.
  */
-export function coerceFieldValue(
-  field: ClickupField | undefined,
-  raw: unknown,
-): unknown {
+export function coerceFieldValue(field: ClickupField | undefined, raw: unknown): unknown {
   if (!field) return raw;
   const ftype = field.type;
   const options = field.type_config?.options ?? [];
   if (ftype === "drop_down") {
-    const opt = options.find(
-      (o) => (o.name ?? "").toLowerCase() === String(raw).toLowerCase(),
-    );
+    const opt = options.find((o) => (o.name ?? "").toLowerCase() === String(raw).toLowerCase());
     return opt?.id ?? raw;
   }
   if (ftype === "labels") {
     const wanted = Array.isArray(raw) ? raw : [raw];
     const ids = wanted.map((name) => {
-      const opt = options.find((o) => (o.label ?? o.name ?? "").toLowerCase() === String(name).toLowerCase());
+      const opt = options.find(
+        (o) => (o.label ?? o.name ?? "").toLowerCase() === String(name).toLowerCase(),
+      );
       return opt?.id ?? name;
     });
     return ids;

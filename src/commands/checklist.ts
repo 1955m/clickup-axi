@@ -14,7 +14,7 @@ import {
 import { formatCountLine } from "../format.js";
 import { getSuggestions } from "../suggestions.js";
 import { resolveWriteGate, writeGateLabel } from "../writeGuard.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const CHECKLIST_HELP = `usage: clickup-axi checklist <subcommand> [flags]
 subcommands[7]:
@@ -67,6 +67,7 @@ const itemSchema: FieldDef<ClickupChecklistItem>[] = [
 ];
 
 async function listChecklists(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task"], "checklist list");
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   // ClickUp exposes NO GET /task/<id>/checklist. Checklists are embedded in
@@ -84,10 +85,15 @@ async function listChecklists(args: string[], ctx: ClickupContext): Promise<stri
 }
 
 async function createChecklist(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--task", "--name", "--execute", "--dry-run"], "checklist create");
   const taskId = getFlag(args, "--task");
   if (!taskId) throw new AxiError("--task <id> is required", "VALIDATION_ERROR");
   const name = getFlag(args, "--name");
-  if (!name) throw new AxiError("--name is required: clickup-axi checklist create --name \"...\"", "VALIDATION_ERROR");
+  if (!name)
+    throw new AxiError(
+      '--name is required: clickup-axi checklist create --name "..."',
+      "VALIDATION_ERROR",
+    );
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   const payload: Record<string, unknown> = { name };
   if (!gate.execute) {
@@ -100,21 +106,28 @@ async function createChecklist(args: string[], ctx: ClickupContext): Promise<str
       renderHelp(["Add --execute to create this checklist in ClickUp"]),
     ]);
   }
-  const created = await post<{ checklist?: ClickupChecklist }>(`/task/${taskId}/checklist`, payload);
+  const created = await post<{ checklist?: ClickupChecklist }>(
+    `/task/${taskId}/checklist`,
+    payload,
+  );
   return renderOutput([
-    renderDetail("created", { id: created.checklist?.id ?? null, name, task: taskId, status: "ok" }, [
-      field("id"),
-      field("name"),
-      field("task"),
-      field("status"),
-    ]),
+    renderDetail(
+      "created",
+      { id: created.checklist?.id ?? null, name, task: taskId, status: "ok" },
+      [field("id"), field("name"), field("task"), field("status")],
+    ),
     renderHelp(getSuggestions({ domain: "checklist", action: "create", id: taskId, ctx })),
   ]);
 }
 
 async function updateChecklist(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--name", "--position", "--execute", "--dry-run"], "checklist update");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Checklist ID is required: clickup-axi checklist update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Checklist ID is required: clickup-axi checklist update <id>",
+      "VALIDATION_ERROR",
+    );
   const name = getFlag(args, "--name");
   const position = getFlag(args, "--position");
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
@@ -139,8 +152,13 @@ async function updateChecklist(args: string[], ctx: ClickupContext): Promise<str
 }
 
 async function deleteChecklist(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--execute", "--dry-run"], "checklist delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Checklist ID is required: clickup-axi checklist delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Checklist ID is required: clickup-axi checklist delete <id>",
+      "VALIDATION_ERROR",
+    );
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
@@ -156,6 +174,11 @@ async function deleteChecklist(args: string[], ctx: ClickupContext): Promise<str
 }
 
 async function createItem(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--checklist", "--name", "--assign", "--execute", "--dry-run"],
+    "checklist item-create",
+  );
   const checklistId = getFlag(args, "--checklist");
   if (!checklistId) throw new AxiError("--checklist <id> is required", "VALIDATION_ERROR");
   const name = getFlag(args, "--name");
@@ -189,8 +212,17 @@ async function createItem(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function updateItem(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--name", "--resolved", "--assign", "--checklist", "--execute", "--dry-run"],
+    "checklist item-update",
+  );
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Checklist item ID is required: clickup-axi checklist item-update <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Checklist item ID is required: clickup-axi checklist item-update <id>",
+      "VALIDATION_ERROR",
+    );
   const name = getFlag(args, "--name");
   const resolved = hasFlag(args, "--resolved");
   const assign = getFlag(args, "--assign");
@@ -224,8 +256,13 @@ async function updateItem(args: string[], ctx: ClickupContext): Promise<string> 
 }
 
 async function deleteItem(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--checklist", "--execute", "--dry-run"], "checklist item-delete");
   const id = getPositional(args, 0);
-  if (!id) throw new AxiError("Checklist item ID is required: clickup-axi checklist item-delete <id>", "VALIDATION_ERROR");
+  if (!id)
+    throw new AxiError(
+      "Checklist item ID is required: clickup-axi checklist item-delete <id>",
+      "VALIDATION_ERROR",
+    );
   const checklistId = getFlag(args, "--checklist");
   if (!checklistId) {
     throw new AxiError("--checklist <id> is required to scope the item delete", "VALIDATION_ERROR");

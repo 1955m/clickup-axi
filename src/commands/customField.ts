@@ -26,7 +26,7 @@ import {
   type FieldIndex,
 } from "../customFields.js";
 import { post, del } from "../clickup.js";
-import type { ClickupContext } from "../context.js";
+import { rejectUnknownFlags, type ClickupContext } from "../context.js";
 
 export const CUSTOM_FIELD_HELP = `usage: clickup-axi custom-field <subcommand> [flags]
 subcommands[3]:
@@ -56,7 +56,10 @@ const fieldSchema: FieldDef<ClickupField>[] = [
   custom("value", (f) => resolveFieldValue(f)),
 ];
 
-function resolveScope(args: string[], ctx: ClickupContext): { index: Promise<FieldIndex>; label: string } {
+function resolveScope(
+  args: string[],
+  ctx: ClickupContext,
+): { index: Promise<FieldIndex>; label: string } {
   const listId = getFlag(args, "--list") ?? ctx.listId;
   const folderId = getFlag(args, "--folder") ?? ctx.folderId;
   const spaceId = getFlag(args, "--space") ?? ctx.spaceId;
@@ -68,6 +71,7 @@ function resolveScope(args: string[], ctx: ClickupContext): { index: Promise<Fie
 }
 
 async function listFields(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--list", "--folder", "--space", "--team"], "custom-field list");
   const { index } = resolveScope(args, ctx);
   const idx = await index;
   const fields = [...idx.values()];
@@ -84,8 +88,17 @@ async function resolveTaskListId(taskId: string): Promise<string | undefined> {
 }
 
 async function setField(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(
+    args,
+    ["--field", "-F", "--list", "--execute", "--dry-run"],
+    "custom-field set",
+  );
   const taskId = getPositional(args, 0);
-  if (!taskId) throw new AxiError("Task ID is required: clickup-axi custom-field set <task-id>", "VALIDATION_ERROR");
+  if (!taskId)
+    throw new AxiError(
+      "Task ID is required: clickup-axi custom-field set <task-id>",
+      "VALIDATION_ERROR",
+    );
   const pairs = ((): string[] => {
     const out: string[] = [];
     for (let i = 0; i < args.length; i++) {
@@ -103,11 +116,17 @@ async function setField(args: string[], ctx: ClickupContext): Promise<string> {
     return out;
   })();
   if (pairs.length === 0) {
-    throw new AxiError("--field \"NAME\"=value is required (repeatable; resolves field UUID by NAME)", "VALIDATION_ERROR");
+    throw new AxiError(
+      '--field "NAME"=value is required (repeatable; resolves field UUID by NAME)',
+      "VALIDATION_ERROR",
+    );
   }
   const listId = getFlag(args, "--list") ?? (await resolveTaskListId(taskId)) ?? ctx.listId;
   if (!listId) {
-    throw new AxiError("--list <id> is required to resolve custom-field UUIDs by name (or the task must have a home list)", "VALIDATION_ERROR");
+    throw new AxiError(
+      "--list <id> is required to resolve custom-field UUIDs by name (or the task must have a home list)",
+      "VALIDATION_ERROR",
+    );
   }
   const index = await fetchListFieldIndex(listId);
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
@@ -116,7 +135,10 @@ async function setField(args: string[], ctx: ClickupContext): Promise<string> {
   for (const pair of pairs) {
     const eq = pair.indexOf("=");
     if (eq <= 0) {
-      throw new AxiError(`Invalid --field value: ${pair}. Use --field "Field Name"=value`, "VALIDATION_ERROR");
+      throw new AxiError(
+        `Invalid --field value: ${pair}. Use --field "Field Name"=value`,
+        "VALIDATION_ERROR",
+      );
     }
     const name = pair.slice(0, eq).trim();
     const rawValue = pair.slice(eq + 1);
@@ -128,12 +150,11 @@ async function setField(args: string[], ctx: ClickupContext): Promise<string> {
   }
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("set", { task: taskId, status: writeGateLabel(gate), custom_fields, set_fields: resolved }, [
-        field("task"),
-        field("status"),
-        field("custom_fields"),
-        field("set_fields"),
-      ]),
+      renderDetail(
+        "set",
+        { task: taskId, status: writeGateLabel(gate), custom_fields, set_fields: resolved },
+        [field("task"), field("status"), field("custom_fields"), field("set_fields")],
+      ),
       renderHelp(["Add --execute to set this custom-field value in ClickUp"]),
     ]);
   }
@@ -151,25 +172,36 @@ async function setField(args: string[], ctx: ClickupContext): Promise<string> {
 }
 
 async function removeField(args: string[], ctx: ClickupContext): Promise<string> {
+  rejectUnknownFlags(args, ["--name", "--list", "--execute", "--dry-run"], "custom-field remove");
   const taskId = getPositional(args, 0);
-  if (!taskId) throw new AxiError("Task ID is required: clickup-axi custom-field remove <task-id>", "VALIDATION_ERROR");
+  if (!taskId)
+    throw new AxiError(
+      "Task ID is required: clickup-axi custom-field remove <task-id>",
+      "VALIDATION_ERROR",
+    );
   const name = getFlag(args, "--name");
-  if (!name) throw new AxiError("--name <NAME> is required (resolves field UUID by NAME)", "VALIDATION_ERROR");
+  if (!name)
+    throw new AxiError(
+      "--name <NAME> is required (resolves field UUID by NAME)",
+      "VALIDATION_ERROR",
+    );
   const listId = getFlag(args, "--list") ?? (await resolveTaskListId(taskId)) ?? ctx.listId;
   if (!listId) {
-    throw new AxiError("--list <id> is required to resolve the custom-field UUID by name", "VALIDATION_ERROR");
+    throw new AxiError(
+      "--list <id> is required to resolve the custom-field UUID by name",
+      "VALIDATION_ERROR",
+    );
   }
   const index = await fetchListFieldIndex(listId);
   const fieldId = requireFieldId(index, name);
   const gate = resolveWriteGate(hasFlag(args, "--execute"), hasFlag(args, "--dry-run"));
   if (!gate.execute) {
     return renderOutput([
-      renderDetail("remove", { task: taskId, name, field_id: fieldId, status: writeGateLabel(gate) }, [
-        field("task"),
-        field("name"),
-        field("field_id"),
-        field("status"),
-      ]),
+      renderDetail(
+        "remove",
+        { task: taskId, name, field_id: fieldId, status: writeGateLabel(gate) },
+        [field("task"), field("name"), field("field_id"), field("status")],
+      ),
       renderHelp(["Add --execute to remove this custom-field value in ClickUp"]),
     ]);
   }

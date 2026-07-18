@@ -14,7 +14,12 @@ const FIELDS: ClickupField[] = [
     name: "Product",
     type: "drop_down",
     value: "opt-2",
-    type_config: { options: [{ id: "opt-1", name: "Backend" }, { id: "opt-2", name: "Frontend" }] },
+    type_config: {
+      options: [
+        { id: "opt-1", name: "Backend" },
+        { id: "opt-2", name: "Frontend" },
+      ],
+    },
   },
   {
     id: "field-2",
