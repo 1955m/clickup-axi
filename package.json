@@ -1,6 +1,6 @@
 {
   "name": "clickup-axi",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "AXI-compliant ClickUp API v2/v3 wrapper — full coverage, token-efficient TOON output, contextual suggestions, custom-field-by-name resolution, --path hierarchy navigation, read-only-by-default write guardrails",
   "type": "module",
